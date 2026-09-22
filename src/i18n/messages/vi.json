@@ -1,0 +1,48 @@
+{
+  "nav": { "market": "Chợ", "sell": "Bán", "account": "Tài khoản", "admin": "Quản trị", "login": "Đăng nhập", "logout": "Đăng xuất" },
+  "home": { "title": "Sản phẩm số", "subtitle": "Template, hướng dẫn và tài liệu — mỗi sản phẩm có một trợ lý đã đọc kỹ nội dung.", "empty": "Chưa có sản phẩm nào.", "free": "Miễn phí" },
+  "product": {
+    "by": "bởi {seller}",
+    "buy": "Mua với giá {price}",
+    "download": "Tải về",
+    "owned": "Bạn đã sở hữu",
+    "unpublished": "Sản phẩm chưa được đăng.",
+    "askTitle": "Hỏi về sản phẩm này",
+    "askHint": "Câu trả lời lấy từ chính tài liệu của sản phẩm, có trích dẫn.",
+    "askPlaceholder": "Chương 3 nói về gì?",
+    "ask": "Hỏi",
+    "signInToAsk": "Đăng nhập để hỏi.",
+    "quota": "Đã dùng {used}/{limit} tin nhắn AI tháng này"
+  },
+  "account": {
+    "title": "Tài khoản",
+    "plan": "Gói",
+    "upgrade": "Nâng cấp Pro — {price}/tháng",
+    "orders": "Đã mua",
+    "noOrders": "Chưa mua gì.",
+    "refund": "Yêu cầu hoàn tiền",
+    "refundRequested": "Đã gửi yêu cầu — quản trị viên sẽ quyết định trong 3 ngày."
+  },
+  "sell": {
+    "title": "Sản phẩm của bạn",
+    "new": "Sản phẩm mới",
+    "productTitle": "Tên",
+    "description": "Mô tả",
+    "price": "Giá (cent USD, 0 = miễn phí)",
+    "file": "Tài liệu (.md hoặc .txt)",
+    "create": "Gửi duyệt",
+    "status": { "DRAFT": "Nháp", "PENDING_REVIEW": "Đang duyệt", "PUBLISHED": "Đã đăng", "REJECTED": "Bị từ chối" }
+  },
+  "admin": {
+    "title": "Quản trị",
+    "review": "Chờ duyệt",
+    "approve": "Duyệt",
+    "reject": "Từ chối",
+    "refunds": "Yêu cầu hoàn tiền",
+    "traces": "Lượt chạy AI",
+    "edition": "Phiên bản",
+    "noPending": "Không có gì chờ."
+  },
+  "login": { "title": "Đăng nhập", "email": "Email", "role": "Vai trò", "submit": "Tiếp tục", "devNote": "Đăng nhập dev: email nào cũng được." },
+  "billing": { "successTitle": "Đã nhận thanh toán", "successBody": "Đơn của bạn kích hoạt ngay khi webhook về, thường trong vòng một giây.", "cancelTitle": "Đã huỷ thanh toán", "cancelBody": "Chưa trừ tiền.", "back": "Quay lại" }
+}

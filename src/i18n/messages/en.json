@@ -1,0 +1,48 @@
+{
+  "nav": { "market": "Marketplace", "sell": "Sell", "account": "Account", "admin": "Admin", "login": "Sign in", "logout": "Sign out" },
+  "home": { "title": "Digital products", "subtitle": "Templates, guides and documents — each one with an assistant that has actually read it.", "empty": "Nothing published yet.", "free": "Free" },
+  "product": {
+    "by": "by {seller}",
+    "buy": "Buy for {price}",
+    "download": "Download",
+    "owned": "You own this",
+    "unpublished": "This product is not published.",
+    "askTitle": "Ask about this product",
+    "askHint": "Answers come from the product's own documents, with citations.",
+    "askPlaceholder": "What does chapter 3 cover?",
+    "ask": "Ask",
+    "signInToAsk": "Sign in to ask.",
+    "quota": "{used} of {limit} AI messages used this month"
+  },
+  "account": {
+    "title": "Account",
+    "plan": "Plan",
+    "upgrade": "Upgrade to Pro — {price}/month",
+    "orders": "Purchases",
+    "noOrders": "No purchases yet.",
+    "refund": "Request refund",
+    "refundRequested": "Refund requested — an admin will decide within 3 days."
+  },
+  "sell": {
+    "title": "Your products",
+    "new": "New product",
+    "productTitle": "Title",
+    "description": "Description",
+    "price": "Price (USD cents, 0 = free)",
+    "file": "Document (.md or .txt)",
+    "create": "Submit for review",
+    "status": { "DRAFT": "Draft", "PENDING_REVIEW": "In review", "PUBLISHED": "Published", "REJECTED": "Rejected" }
+  },
+  "admin": {
+    "title": "Admin",
+    "review": "Pending review",
+    "approve": "Approve",
+    "reject": "Reject",
+    "refunds": "Refund requests",
+    "traces": "AI runs",
+    "edition": "Edition",
+    "noPending": "Nothing waiting."
+  },
+  "login": { "title": "Sign in", "email": "Email", "role": "Role", "submit": "Continue", "devNote": "Development sign-in: any email works." },
+  "billing": { "successTitle": "Payment received", "successBody": "Your purchase activates as soon as the webhook lands — usually within a second.", "cancelTitle": "Checkout cancelled", "cancelBody": "Nothing was charged.", "back": "Back" }
+}
