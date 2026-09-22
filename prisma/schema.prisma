@@ -1,0 +1,166 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+enum Role {
+  BUYER
+  SELLER
+  ADMIN
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String
+  role          Role           @default(BUYER)
+  sessions      Session[]
+  products      Product[]
+  orders        Order[]
+  subscriptions Subscription[]
+  usage         UsageCounter[]
+  traces        AgentTrace[]
+  createdAt     DateTime       @default(now())
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+}
+
+/// A digital product: one downloadable file plus the text we indexed from it.
+model Product {
+  id          String         @id @default(cuid())
+  sellerId    String
+  seller      User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  slug        String         @unique
+  title       String
+  description String
+  priceMinor  Int
+  currency    String         @default("usd")
+  status      ProductStatus  @default(DRAFT)
+  /// Original file name, for the download.
+  fileName    String?
+  /// Where the file lives (local path in dev, object key in prod).
+  fileKey     String?
+  chunks      ProductChunk[]
+  orders      Order[]
+  traces      AgentTrace[]
+  /// The durable-workflow run that owns this product's review, if any.
+  reviewRunId String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status])
+  @@index([sellerId])
+}
+
+/// One chunk of a product's document, with its embedding. Written and queried
+/// through raw SQL because Prisma cannot express the vector type or `<=>`.
+model ProductChunk {
+  id         String                 @id @default(cuid())
+  productId  String
+  product    Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ordinal    Int
+  heading    String?
+  content    String
+  tokenCount Int
+  embedding  Unsupported("vector(1024)")?
+
+  @@unique([productId, ordinal])
+}
+
+/// A one-time purchase. Status moves forward only (src/domain/order.ts).
+model Order {
+  id          String   @id @default(cuid())
+  buyerId     String
+  buyer       User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  currency    String
+  status      String
+  provider    String   @default("stripe")
+  providerRef String?  @unique
+  checkoutRef String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([buyerId, status])
+  @@index([productId, status])
+}
+
+/// A membership plan. Status moves forward only (src/domain/subscription.ts).
+model Subscription {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planKey          String
+  status           String
+  provider         String    @default("stripe")
+  providerRef      String?   @unique
+  checkoutRef      String?   @unique
+  currentPeriodEnd DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([userId, status])
+}
+
+/// Idempotency gate: provider event id is the primary key.
+model WebhookEvent {
+  providerEventId String   @id
+  provider        String
+  type            String
+  receivedAt      DateTime @default(now())
+}
+
+/// Metered usage per user, per feature, per UTC month.
+model UsageCounter {
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature String
+  period  String
+  used    Int    @default(0)
+
+  @@id([userId, feature, period])
+}
+
+/// One agent run, as exported by agent-runtime's tracer. The admin trace page reads this.
+model AgentTrace {
+  id           String   @id @default(cuid())
+  runId        String   @unique
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  status       String
+  modelCalls   Int
+  toolCalls    Int
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float?
+  durationMs   Int
+  spans        Json
+  createdAt    DateTime @default(now())
+
+  @@index([createdAt])
+}
