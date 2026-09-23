@@ -66,9 +66,16 @@ bag-of-words hasher stands in — fine for a demo, useless for real search),
 `STRIPE_*` turns on real checkout (`pnpm stripe:listen` for the webhook).
 
 ```bash
-pnpm test                       # 16 unit tests anywhere; 5 flow tests need DATABASE_URL
+pnpm test                       # 24 unit tests anywhere; 5 flow tests need DATABASE_URL
+pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
 pnpm typecheck && pnpm build
 ```
+
+**Evals.** `evals/` asks forty questions of the two seed documents, each one
+naming the passage that answers it and the fact the answer must carry. It runs
+the real chunker, embedder, MMR and agent prompt against an in-memory index, so
+it needs no database and no key; `EVAL_MODEL=1` swaps the extractive baseline
+for the real model. Numbers and what they mean: [`evals/README.md`](evals/README.md).
 
 ## Layout
 
@@ -81,8 +88,9 @@ src/
   app/api/       checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms
-tests/           domain, rag, stripe mapping, and the five end-to-end flows on real Postgres
-scripts/         setup-db, seed
+tests/           domain, rag, stripe mapping, evals, and the five end-to-end flows on real Postgres
+evals/           the assistant eval suite: questions · harness · report
+scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 ```
 
 ## What is deliberately not here
