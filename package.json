@@ -9,6 +9,7 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "eval": "tsx evals/run.ts",
     "test:watch": "vitest",
     "db:push": "prisma db push",
     "db:setup": "tsx scripts/setup-db.ts",

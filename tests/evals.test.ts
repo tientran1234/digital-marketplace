@@ -7,7 +7,8 @@
 import { describe, expect, it } from "vitest";
 import { chunkDocument } from "@/rag";
 import { seedDocs } from "../scripts/seed-docs";
-import { answerable, questions } from "../evals/questions";
+import { answerable, questions, type EvalQuestion } from "../evals/questions";
+import { grade, runEval } from "../evals/harness";
 
 const headingsBySlug = new Map(seedDocs.map((d) => [d.slug, new Set(chunkDocument(d.text).map((c) => c.heading))]));
 
@@ -39,5 +40,40 @@ describe("eval question set", () => {
       const text = chunkDocument(doc.text).filter((c) => q.passages.includes(c.heading ?? "")).map((c) => c.content).join("\n");
       for (const pattern of q.answer) expect(pattern.test(text), `${q.id}: ${pattern} is not in ${q.passages.join(", ")}`).toBe(true);
     }
+  });
+});
+
+describe("grading", () => {
+  const q: EvalQuestion = { id: "x", slug: "s", question: "?", passages: ["Refunds"], answer: [/fourteen/i] };
+  const no: EvalQuestion = { id: "y", slug: "s", question: "?", passages: [], answer: [], reject: [/gantt/i] };
+
+  it("fails an answer that does not carry the expected fact", () => {
+    expect(grade(q, "Refunds are generous.", ["Refunds"]).correct).toBe(false);
+    expect(grade(q, "You have fourteen days [1].", ["Refunds"]).correct).toBe(true);
+  });
+
+  it("counts a hit only when the expected passage is among the retrieved", () => {
+    expect(grade(q, "fourteen", ["Annual billing", "Free trials"]).hit).toBe(false);
+    expect(grade(q, "fourteen", ["Annual billing", "Refunds"]).hit).toBe(true);
+  });
+
+  it("fails an unanswerable question that gets invented an answer, passes a refusal", () => {
+    expect(grade(no, "Yes, there is a Gantt chart view.", []).correct).toBe(false);
+    const refusal = grade(no, "The documents do not mention that.", []);
+    expect(refusal).toMatchObject({ correct: true, refused: true, hit: null });
+  });
+});
+
+describe("assistant eval", () => {
+  it("meets the floors recorded in evals/README.md", async () => {
+    const report = await runEval();
+    expect(report.model).toBe("extractive-baseline");
+    expect(report.results).toHaveLength(40);
+    // Measured 97.1% / 94.1% on the hash embedder; the floors leave room for
+    // one more miss, not for a pipeline that stopped retrieving.
+    expect(report.recallAt5).toBeGreaterThanOrEqual(0.9);
+    expect(report.answerCorrectness).toBeGreaterThanOrEqual(0.85);
+    // The baseline only ever quotes, so anything else is a bug in the harness.
+    expect(report.groundedness).toBe(1);
   });
 });

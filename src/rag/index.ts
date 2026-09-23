@@ -4,5 +4,6 @@ export { VoyageEmbedder, HashEmbedder, EMBEDDING_DIMENSIONS } from "./embed";
 export type { Embedder } from "./embed";
 export { mmr, cosine } from "./mmr";
 export { indexProduct, nearestChunks } from "./store";
+export type { StoredChunk } from "./store";
 export { retrieve } from "./retrieve";
-export type { Passage } from "./retrieve";
+export type { ChunkSearch, Passage, RetrieveOptions } from "./retrieve";

@@ -18,7 +18,7 @@ import type { Product, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { canUse } from "@/domain/plans";
-import { HashEmbedder, VoyageEmbedder, retrieve, type Embedder } from "@/rag";
+import { HashEmbedder, VoyageEmbedder, retrieve, type ChunkSearch, type Embedder } from "@/rag";
 import { entitlementsForUser } from "./billing";
 import { meter } from "./usage";
 
@@ -72,26 +72,27 @@ export class AssistantGateError extends Error {
   }
 }
 
-export interface AskInput {
-  user: User;
-  product: Product & { seller: { name: string } };
-  question: string;
-  onEvent?: (e: AgentEvent) => void;
+/** What the agent needs to know about the listing. */
+export type AssistantProduct = Pick<Product, "id" | "title" | "priceMinor" | "currency" | "status"> & { seller: { name: string } };
+
+export interface AssistantAgentOptions {
+  embedder?: Embedder;
+  /** Where search_docs looks. Defaults to pgvector; the eval harness passes an in-memory index. */
+  search?: ChunkSearch;
 }
 
-export async function askAboutProduct({ user, product, question, onEvent }: AskInput): Promise<AgentResult> {
-  // Gate 1: does the plan include the feature. Gate 2: is there quota left.
-  const entitlements = await entitlementsForUser(user.id);
-  if (!canUse(entitlements, "ask_ai")) throw new AssistantGateError(403, "not included in your plan");
-  const usage = await meter(user.id, "aiMessages", entitlements.quotas.aiMessages);
-  if (!usage.allowed) throw new AssistantGateError(429, "monthly AI quota exceeded", usage);
-
+/**
+ * The prompt and tools, with no gate, quota or tracer around them. Split out
+ * so the eval suite in `evals/` grades the agent the ask box actually runs
+ * rather than a copy of it that drifts.
+ */
+export function assistantAgent(product: AssistantProduct, options: AssistantAgentOptions = {}) {
   const searchDocs = defineTool({
     name: "search_docs",
     description: "Search the product's own documentation. Returns numbered passages to cite.",
     input: z.object({ query: z.string().min(1).describe("What to look for, in the document's language") }),
     execute: async ({ query }) => {
-      const passages = await retrieve(product.id, query, embedder(), { k: 5 });
+      const passages = await retrieve(product.id, query, options.embedder ?? embedder(), { k: 5, ...(options.search ? { search: options.search } : {}) });
       if (passages.length === 0) return "No passages found.";
       return passages.map((p) => `[${p.index}]${p.heading ? ` (${p.heading})` : ""} ${p.content}`).join("\n\n");
     },
@@ -109,18 +110,35 @@ export async function askAboutProduct({ user, product, question, onEvent }: AskI
     }),
   });
 
+  const system = [
+    `You answer buyers' questions about the digital product "${product.title}".`,
+    "Use search_docs for anything about the product's contents and cite passages as [n].",
+    "Use product_facts for price, seller, or availability.",
+    "If the documents do not contain the answer, say so plainly — never invent contents.",
+    "Reply in the language the user wrote in.",
+  ].join(" ");
+
+  return { system, tools: [searchDocs, productFacts], maxIterations: 6 };
+}
+
+export interface AskInput {
+  user: User;
+  product: Product & { seller: { name: string } };
+  question: string;
+  onEvent?: (e: AgentEvent) => void;
+}
+
+export async function askAboutProduct({ user, product, question, onEvent }: AskInput): Promise<AgentResult> {
+  // Gate 1: does the plan include the feature. Gate 2: is there quota left.
+  const entitlements = await entitlementsForUser(user.id);
+  if (!canUse(entitlements, "ask_ai")) throw new AssistantGateError(403, "not included in your plan");
+  const usage = await meter(user.id, "aiMessages", entitlements.quotas.aiMessages);
+  if (!usage.allowed) throw new AssistantGateError(429, "monthly AI quota exceeded", usage);
+
   return runAgent({
     provider: modelProvider(),
-    system: [
-      `You answer buyers' questions about the digital product "${product.title}".`,
-      "Use search_docs for anything about the product's contents and cite passages as [n].",
-      "Use product_facts for price, seller, or availability.",
-      "If the documents do not contain the answer, say so plainly — never invent contents.",
-      "Reply in the language the user wrote in.",
-    ].join(" "),
-    tools: [searchDocs, productFacts],
+    ...assistantAgent(product),
     input: question,
-    maxIterations: 6,
     tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),
     runName: `ask:${product.slug}`,
     ...(onEvent ? { onEvent } : {}),
