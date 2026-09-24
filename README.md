@@ -30,10 +30,12 @@ two racing deliveries produce one winner. Download access is one pure function
 never disagree.
 
 **Ask.** `POST /api/products/:id/ask` streams SSE. Before the model is called:
-plan check (`ask_ai`), then monthly quota incremented in the database. The
-agent has two tools — `search_docs` (retrieve + MMR over the product's chunks)
-and `product_facts` — a hard cap of six iterations, and a tracer that writes
-every run's spans, tokens and cost to `AgentTrace` for the admin page.
+plan check (`ask_ai`), then monthly quota incremented in the database — and
+refunded if the provider fails before a single token reaches the buyer, though
+a run that dies half way through an answer still costs the message. The agent
+has two tools — `search_docs` (retrieve + MMR over the product's chunks) and
+`product_facts` — a hard cap of six iterations, and a tracer that writes every
+run's spans, tokens and cost to `AgentTrace` for the admin page.
 
 **Review.** Submitting a product starts the `product-review` workflow: mark
 pending, wait for the `review` signal (7-day timeout → rejected), publish or
