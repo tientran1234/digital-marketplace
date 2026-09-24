@@ -16,3 +16,9 @@ export async function meter(userId: string, feature: string, limit: number, n = 
   }
   return { used, limit, allowed: used <= limit };
 }
+
+/** Give a metered unit back. Guarded so a counter can never go negative. */
+export async function refundMeter(userId: string, feature: string, n = 1): Promise<void> {
+  const period = currentPeriod();
+  await db.usageCounter.updateMany({ where: { userId, feature, period, used: { gte: n } }, data: { used: { decrement: n } } });
+}

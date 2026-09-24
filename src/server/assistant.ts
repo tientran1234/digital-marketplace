@@ -20,7 +20,7 @@ import { env } from "@/lib/env";
 import { canUse } from "@/domain/plans";
 import { HashEmbedder, VoyageEmbedder, retrieve, type ChunkSearch, type Embedder } from "@/rag";
 import { entitlementsForUser } from "./billing";
-import { meter } from "./usage";
+import { meter, refundMeter } from "./usage";
 
 export class PrismaTraceExporter implements TraceExporter {
   constructor(private readonly meta: { userId?: string; productId?: string }) {}
@@ -135,12 +135,26 @@ export async function askAboutProduct({ user, product, question, onEvent }: AskI
   const usage = await meter(user.id, "aiMessages", entitlements.quotas.aiMessages);
   if (!usage.allowed) throw new AssistantGateError(429, "monthly AI quota exceeded", usage);
 
-  return runAgent({
-    provider: modelProvider(),
-    ...assistantAgent(product),
-    input: question,
-    tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),
-    runName: `ask:${product.slug}`,
-    ...(onEvent ? { onEvent } : {}),
-  });
+  // The counter goes up before the model is called, so a run that dies half
+  // way through an answer still costs the message the buyer read. One that
+  // dies before a single token reached them delivered nothing, and is refunded.
+  let delivered = false;
+  const watch = (e: AgentEvent) => {
+    if (e.type === "text_delta" && e.text.length > 0) delivered = true;
+    onEvent?.(e);
+  };
+
+  try {
+    return await runAgent({
+      provider: modelProvider(),
+      ...assistantAgent(product),
+      input: question,
+      tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),
+      runName: `ask:${product.slug}`,
+      onEvent: watch,
+    });
+  } catch (err) {
+    if (!delivered) await refundMeter(user.id, "aiMessages");
+    throw err;
+  }
 }
