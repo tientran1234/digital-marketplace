@@ -6,7 +6,7 @@
  *   DATABASE_URL=… pnpm test
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { FakeProvider, callTools, reply } from "agent-runtime";
+import { FakeProvider, callTools, reply, type AgentEvent } from "agent-runtime";
 import { db } from "@/lib/db";
 import { pool } from "@/lib/pg";
 import { HashEmbedder, indexProduct, retrieve } from "@/rag";
@@ -15,6 +15,7 @@ import { setBillingProviderForTests } from "@/server/provider";
 import { applyEvent, entitlementsForUser, startOrderCheckout } from "@/server/billing";
 import { engine, productReview, refundRequest, workflowStore } from "@/server/workflows";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
+import { currentPeriod } from "@/server/usage";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 
@@ -110,5 +111,29 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     expect(trace).toMatchObject({ modelCalls: 2, toolCalls: 1, status: "ok" });
     expect(trace.costUsd).toBeGreaterThan(0);
     expect((await entitlementsForUser(buyerId)).planKey).toBe("free");
+  });
+
+  it("assistant: a provider error before any output gives the message back", async () => {
+    const user = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    const product = await db.product.findUniqueOrThrow({ where: { id: productId }, include: { seller: { select: { name: true } } } });
+    const used = async () =>
+      (await db.usageCounter.findUnique({ where: { userId_feature_period: { userId: buyerId, feature: "aiMessages", period: currentPeriod() } } }))?.used ?? 0;
+
+    setModelProviderForTests(new FakeProvider([new Error("provider is down")], "claude-opus-5"));
+    await expect(askAboutProduct({ user, product, question: "How long do I have?" })).rejects.toThrow("provider is down");
+    expect(await used()).toBe(0);
+
+    // The same failure after the buyer has read something still costs a message.
+    const seen: string[] = [];
+    setModelProviderForTests(new FakeProvider([
+      callTools([{ name: "product_facts", input: {} }], "Let me check the listing."),
+      new Error("provider is down"),
+    ], "claude-opus-5"));
+    const onEvent = (e: AgentEvent) => {
+      if (e.type === "text_delta") seen.push(e.text);
+    };
+    await expect(askAboutProduct({ user, product, question: "How much is it?", onEvent })).rejects.toThrow("provider is down");
+    expect(seen.join("")).toBe("Let me check the listing.");
+    expect(await used()).toBe(1);
   });
 });
