@@ -33,7 +33,7 @@ export function NewProductForm() {
       <label>{t("productTitle")}</label><input name="title" required minLength={3} />
       <label>{t("description")}</label><textarea name="description" rows={3} required minLength={10} />
       <label>{t("price")}</label><input name="priceMinor" type="number" min={0} step={1} defaultValue={0} />
-      <label>{t("file")}</label><input name="file" type="file" accept=".md,.txt,.markdown" required />
+      <label>{t("file")}</label><input name="file" type="file" accept=".md,.txt,.markdown,.pdf" required />
       {error && <p className="err">{error}</p>}
       <div style={{ marginTop: 16 }}><button type="submit" disabled={busy}>{t("create")}</button></div>
     </form>

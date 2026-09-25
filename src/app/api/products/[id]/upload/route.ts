@@ -2,13 +2,14 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/server/auth";
 import { embedder } from "@/server/assistant";
 import { handle, type Params } from "@/server/http";
+import { extractText } from "@/server/extract";
 import { saveFile } from "@/server/storage";
 import { indexProduct } from "@/rag";
 
 export const runtime = "nodejs";
 const MAX_BYTES = 2 * 1024 * 1024;
 
-/** Attach the product's document (.md / .txt) and index it for the assistant. */
+/** Attach the product's document (.md / .txt / .pdf) and index it for the assistant. */
 export const POST = handle<Params<"id">>(async (request, { params }) => {
   const user = await requireUser(["SELLER", "ADMIN"]);
   const { id } = await params;
@@ -19,11 +20,12 @@ export const POST = handle<Params<"id">>(async (request, { params }) => {
   const file = form.get("file");
   if (!(file instanceof File)) return Response.json({ error: "file is required" }, { status: 400 });
   if (file.size > MAX_BYTES) return Response.json({ error: "file too large (2 MB max)" }, { status: 413 });
-  if (!/\.(md|txt|markdown)$/i.test(file.name)) return Response.json({ error: "only .md and .txt for now" }, { status: 415 });
 
   const bytes = new Uint8Array(await file.arrayBuffer());
+  // Extract before storing, so a file we cannot index never lands on disk.
+  const text = await extractText(file.name, bytes);
   const fileKey = await saveFile(product.id, file.name, bytes);
-  const chunks = await indexProduct(product.id, new TextDecoder().decode(bytes), embedder());
+  const chunks = await indexProduct(product.id, text, embedder());
   await db.product.update({ where: { id }, data: { fileName: file.name, fileKey } });
   return Response.json({ chunks: chunks.length });
 });

@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 import { AuthError } from "./auth";
 import { AssistantGateError } from "./assistant";
+import { UploadError } from "./extract";
 
 type Handler<C> = (request: Request, ctx: C) => Promise<Response>;
 
@@ -12,6 +13,7 @@ export function handle<C = unknown>(fn: Handler<C>): Handler<C> {
     } catch (err) {
       if (err instanceof AuthError) return Response.json({ error: err.message }, { status: err.status });
       if (err instanceof AssistantGateError) return Response.json({ error: err.message, detail: err.detail ?? null }, { status: err.status });
+      if (err instanceof UploadError) return Response.json({ error: err.message }, { status: err.status });
       if (err instanceof ZodError) return Response.json({ error: "invalid input", details: err.flatten() }, { status: 400 });
       throw err;
     }

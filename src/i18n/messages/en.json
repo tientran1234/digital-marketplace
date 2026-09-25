@@ -29,7 +29,7 @@
     "productTitle": "Title",
     "description": "Description",
     "price": "Price (USD cents, 0 = free)",
-    "file": "Document (.md or .txt)",
+    "file": "Document (.md, .txt or .pdf)",
     "create": "Submit for review",
     "status": { "DRAFT": "Draft", "PENDING_REVIEW": "In review", "PUBLISHED": "Published", "REJECTED": "Rejected" }
   },

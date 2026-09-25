@@ -29,7 +29,7 @@
     "productTitle": "Tên",
     "description": "Mô tả",
     "price": "Giá (cent USD, 0 = miễn phí)",
-    "file": "Tài liệu (.md hoặc .txt)",
+    "file": "Tài liệu (.md, .txt hoặc .pdf)",
     "create": "Gửi duyệt",
     "status": { "DRAFT": "Nháp", "PENDING_REVIEW": "Đang duyệt", "PUBLISHED": "Đã đăng", "REJECTED": "Bị từ chối" }
   },
