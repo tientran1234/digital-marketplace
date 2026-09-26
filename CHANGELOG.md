@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-26
+
+- Object storage adapter: `server/storage.ts` now picks an S3-compatible bucket (works with R2, MinIO and AWS S3, SigV4-signed with no SDK) when the `S3_*` variables are set and keeps local disk for dev, so product files survive a deploy on a host whose filesystem is ephemeral instead of vanishing from under the download route.
+
 ## 2026-09-25
 
 - PDF uploads: the upload route parses them to text with `pdf-parse` (page-boundary markers off, and a scan with no text layer is refused rather than indexed as nothing) while the chunker is unchanged, so a seller can attach the manual they already have instead of rewriting it as Markdown.

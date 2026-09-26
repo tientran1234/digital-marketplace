@@ -19,7 +19,9 @@ The RAG pipeline (structure-aware chunking → embeddings → pgvector → MMR
 re-ranking) lives in `src/rag/` and runs on Postgres alone — no vector service.
 Uploads are `.md`, `.txt` or `.pdf`; `server/extract.ts` flattens a PDF to text
 before the chunker sees it, and refuses a scan with no text layer rather than
-indexing an empty document.
+indexing an empty document. The file itself goes through `server/storage.ts`:
+local disk in dev, an S3-compatible bucket (R2, MinIO, AWS S3) wherever the
+`S3_*` variables are set — SigV4 signed by hand, no SDK.
 
 ## Flows
 
@@ -68,7 +70,9 @@ pnpm dev                        # http://localhost:3000/en  (sign in as buyer/se
 With keys: `ANTHROPIC_API_KEY` turns on the real assistant (Claude via
 agent-runtime), `VOYAGE_API_KEY` turns on real embeddings (without it, a
 bag-of-words hasher stands in — fine for a demo, useless for real search),
-`STRIPE_*` turns on real checkout (`pnpm stripe:listen` for the webhook).
+`STRIPE_*` turns on real checkout (`pnpm stripe:listen` for the webhook), and
+`S3_*` moves product files off the local disk into a bucket. Setting some but
+not all of the `S3_*` variables is an error rather than a fallback to disk.
 
 ```bash
 pnpm test                       # 24 unit tests anywhere; 5 flow tests need DATABASE_URL
@@ -87,13 +91,13 @@ for the real model. Numbers and what they mean: [`evals/README.md`](evals/README
 ```
 src/
   domain/        pure: billing events, order + subscription state machines, plans, download access
-  providers/     stripe.ts (the only file importing stripe) · fake.ts
+  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · fake.ts
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   server/        billing · workflows · assistant · auth (opaque sessions) · usage · license · storage · extract
   app/api/       checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms
-tests/           domain, rag, upload extraction, stripe mapping, evals, and the five end-to-end flows on real Postgres
+tests/           domain, rag, upload extraction, storage keys + S3 signing, stripe mapping, evals, and the five end-to-end flows on real Postgres
 evals/           the assistant eval suite: questions · harness · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 ```
@@ -103,6 +107,4 @@ scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 - **Real sign-in.** Sessions are real (opaque id, server-side row, httpOnly);
   the login route is a dev shortcut. Swap it for Auth.js / magic links; nothing
   that reads sessions changes.
-- **Object storage.** Files land on local disk. On Vercel that is ephemeral —
-  `server/storage.ts` is two functions to reimplement on S3 or Vercel Blob.
 - **Seller payouts.** Stripe Connect is a project of its own.
