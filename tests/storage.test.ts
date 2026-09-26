@@ -1,6 +1,18 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, it } from "vitest";
+import { mkdtemp, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
 import { authorization, s3Bucket, type S3Config } from "@/providers/s3";
+import {
+  fileKey,
+  localStore,
+  readFileByKey,
+  saveFile,
+  selectStore,
+  setFileStoreForTests,
+  type FileStore,
+} from "@/server/storage";
 
 /**
  * AWS publishes a worked "GET Object" example for Signature Version 4 along
@@ -119,5 +131,84 @@ describe("s3Bucket", () => {
   it("raises the bucket's refusal instead of storing or returning nothing", async () => {
     const { store } = fakeBucket();
     await expect(store.get("prod_1/missing.pdf")).rejects.toThrow(/404/);
+  });
+});
+
+const S3_ENV = {
+  S3_ENDPOINT: "https://acct.r2.cloudflarestorage.com",
+  S3_BUCKET: "products",
+  S3_ACCESS_KEY_ID: "key",
+  S3_SECRET_ACCESS_KEY: "secret",
+};
+
+describe("selectStore", () => {
+  it("keeps local disk when no bucket is configured, so dev needs no credentials", () => {
+    expect(selectStore({}, "/tmp/storage").name).toBe("disk");
+  });
+
+  it("uses the bucket once it is configured", () => {
+    expect(selectStore(S3_ENV, "/tmp/storage").name).toBe("s3");
+  });
+
+  it("refuses a half-configured bucket rather than writing to a disk that will not keep the file", () => {
+    const { S3_SECRET_ACCESS_KEY: _omitted, ...partial } = S3_ENV;
+    expect(() => selectStore(partial, "/tmp/storage")).toThrow(/S3_SECRET_ACCESS_KEY/);
+  });
+});
+
+describe("fileKey", () => {
+  it("prefixes the product and reduces the filename to path-safe characters", () => {
+    expect(fileKey("prod_1", "Hướng dẫn sử dụng.pdf")).toBe("prod_1/H_ng_d_n_s_d_ng.pdf");
+    expect(fileKey("prod_1", "guide v2.final.md")).toBe("prod_1/guide_v2.final.md");
+  });
+
+  it("cannot be talked out of the product's prefix by the filename", () => {
+    expect(fileKey("prod_1", "../../etc/passwd")).toBe("prod_1/____etc_passwd");
+    expect(fileKey("prod_1", "/absolute")).toBe("prod_1/_absolute");
+  });
+
+  it("only ever mints keys the download route will accept", async () => {
+    for (const name of ["../../etc/passwd", "..", "report..2026.pdf", "a/../b.md"]) {
+      const key = fileKey("prod_1", name);
+      expect(key).not.toContain("..");
+      // The guard in readFileByKey is the same one, so a key that trips it is a
+      // file the seller uploaded successfully and no buyer can ever download.
+      setFileStoreForTests({ name: "disk", async put() {}, get: async () => Buffer.alloc(0) });
+      await expect(readFileByKey(key)).resolves.toBeInstanceOf(Buffer);
+    }
+    setFileStoreForTests(null);
+  });
+});
+
+describe("the file store behind the routes", () => {
+  afterEach(() => setFileStoreForTests(null));
+
+  it("round-trips an upload through local disk", async () => {
+    const root = await mkdtemp(join(tmpdir(), "storage-"));
+    setFileStoreForTests(localStore(root));
+    const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]);
+
+    const key = await saveFile("prod_1", "guide.pdf", bytes);
+    expect(key).toBe("prod_1/guide.pdf");
+    expect(new Uint8Array(await readFileByKey(key))).toEqual(bytes);
+    // The key is the path under the root, which is what lets a directory be
+    // copied into a bucket without rewriting every product's fileKey.
+    expect(new Uint8Array(await readFile(join(root, key)))).toEqual(bytes);
+  });
+
+  it("never asks the store for a key that climbs out of the product prefix", async () => {
+    const asked: string[] = [];
+    const spy: FileStore = {
+      name: "disk",
+      async put() {},
+      async get(key) {
+        asked.push(key);
+        return Buffer.alloc(0);
+      },
+    };
+    setFileStoreForTests(spy);
+
+    await expect(readFileByKey("prod_1/../../secrets.env")).rejects.toThrow(/invalid key/);
+    expect(asked).toEqual([]);
   });
 });
