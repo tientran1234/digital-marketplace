@@ -1,6 +1,6 @@
 {
   "nav": { "market": "Marketplace", "sell": "Sell", "account": "Account", "admin": "Admin", "login": "Sign in", "logout": "Sign out" },
-  "home": { "title": "Digital products", "subtitle": "Templates, guides and documents — each one with an assistant that has actually read it.", "empty": "Nothing published yet.", "free": "Free" },
+  "home": { "title": "Digital products", "subtitle": "Templates, guides and documents — each one with an assistant that has actually read it.", "empty": "Nothing published yet.", "emptyHint": "Published products appear here — sellers submit them for review first.", "free": "Free" },
   "product": {
     "by": "by {seller}",
     "buy": "Buy for {price}",
@@ -20,6 +20,7 @@
     "upgrade": "Upgrade to Pro — {price}/month",
     "orders": "Purchases",
     "noOrders": "No purchases yet.",
+    "noOrdersHint": "Anything you buy shows up here, with its download and refund request.",
     "refund": "Request refund",
     "refundRequested": "Refund requested — an admin will decide within 3 days."
   },
@@ -31,6 +32,8 @@
     "price": "Price (USD cents, 0 = free)",
     "file": "Document (.md, .txt or .pdf)",
     "create": "Submit for review",
+    "noProducts": "No products yet.",
+    "noProductsHint": "Upload a document below and it goes to review; the assistant indexes it on the way.",
     "status": { "DRAFT": "Draft", "PENDING_REVIEW": "In review", "PUBLISHED": "Published", "REJECTED": "Rejected" }
   },
   "admin": {
@@ -41,7 +44,12 @@
     "refunds": "Refund requests",
     "traces": "AI runs",
     "edition": "Edition",
-    "noPending": "Nothing waiting."
+    "noPending": "Nothing waiting.",
+    "noPendingHint": "Products land here when a seller submits them for review.",
+    "noRefunds": "No refunds to decide.",
+    "noRefundsHint": "A buyer's request waits here for three days before it is denied automatically.",
+    "noTraces": "No AI runs yet.",
+    "noTracesHint": "Every answer the assistant streams is recorded here with its tokens and cost."
   },
   "login": { "title": "Sign in", "email": "Email", "role": "Role", "submit": "Continue", "devNote": "Development sign-in: any email works." },
   "billing": { "successTitle": "Payment received", "successBody": "Your purchase activates as soon as the webhook lands — usually within a second.", "cancelTitle": "Checkout cancelled", "cancelBody": "Nothing was charged.", "back": "Back" }

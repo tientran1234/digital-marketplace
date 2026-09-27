@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 import { getCurrentUser } from "@/server/auth";
+import { EmptyState } from "@/components/EmptyState";
 import { NewProductForm } from "@/components/NewProductForm";
 
 const tone: Record<string, string> = { PUBLISHED: "ok", PENDING_REVIEW: "warn", REJECTED: "bad", DRAFT: "" };
@@ -18,15 +19,17 @@ export default async function SellPage({ params }: { params: Promise<{ locale: s
   return (
     <>
       <h1>{t("title")}</h1>
-      <table><thead><tr><th>Title</th><th>Price</th><th>Status</th></tr></thead><tbody>
-        {products.map((p) => (
-          <tr key={p.id}>
-            <td><Link href={`/${locale}/p/${p.slug}`}>{p.title}</Link></td>
-            <td>{money(p.priceMinor, p.currency, locale) ?? "Free"}</td>
-            <td><span className={`tag ${tone[p.status] ?? ""}`}>{t(`status.${p.status}` as "status.DRAFT")}</span></td>
-          </tr>
-        ))}
-      </tbody></table>
+      {products.length === 0 ? <EmptyState title={t("noProducts")} hint={t("noProductsHint")} /> : (
+        <table><thead><tr><th>Title</th><th>Price</th><th>Status</th></tr></thead><tbody>
+          {products.map((p) => (
+            <tr key={p.id}>
+              <td><Link href={`/${locale}/p/${p.slug}`}>{p.title}</Link></td>
+              <td>{money(p.priceMinor, p.currency, locale) ?? "Free"}</td>
+              <td><span className={`tag ${tone[p.status] ?? ""}`}>{t(`status.${p.status}` as "status.DRAFT")}</span></td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
       <h2>{t("new")}</h2>
       <NewProductForm />
     </>

@@ -126,7 +126,7 @@ describe("copy", () => {
   it("has a title and a hint for every empty state", () => {
     const at = (messages: unknown, path: string) =>
       path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown>)?.[key], messages);
-    for (const key of ["home.empty", "home.emptyHint", "account.noOrders", "account.noOrdersHint", "sell.noProducts", "sell.noProductsHint", "admin.noPending", "admin.noPendingHint"]) {
+    for (const key of ["home.empty", "home.emptyHint", "account.noOrders", "account.noOrdersHint", "sell.noProducts", "sell.noProductsHint", "admin.noPending", "admin.noPendingHint", "admin.noRefunds", "admin.noRefundsHint", "admin.noTraces", "admin.noTracesHint"]) {
       expect(at(en, key), key).toBeTruthy();
     }
   });

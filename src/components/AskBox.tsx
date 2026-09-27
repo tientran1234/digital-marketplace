@@ -52,7 +52,11 @@ export function AskBox({ productId }: { productId: string }) {
         <div className="row" style={{ marginTop: 8 }}><button type="submit" disabled={busy}>{t("ask")}</button></div>
       </form>
       {chips.length > 0 && <div className="chips">{chips.map((c, i) => <span key={i} className={`tag ${c.error ? "bad" : c.done ? "ok" : ""}`}>{c.name}{c.done ? " ✓" : "…"}</span>)}</div>}
-      {(answer || busy) && <div className="answer">{answer || "…"}</div>}
+      {(answer || busy) && (
+        /* Retrieval runs before the first token, so the wait has nothing to show:
+           skeleton lines stand in until the answer starts arriving. */
+        <div className="answer">{answer || <><div className="skeleton" style={{ width: "92%" }} /><div className="skeleton" style={{ width: "78%" }} /><div className="skeleton" style={{ width: "40%" }} /></>}</div>
+      )}
       {error && <p className="err">{error}</p>}
     </section>
   );

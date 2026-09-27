@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { pool } from "@/lib/pg";
 import { getCurrentUser } from "@/server/auth";
 import { edition } from "@/server/license";
+import { EmptyState } from "@/components/EmptyState";
 import { ReviewActions, RefundDecision } from "@/components/AdminActions";
 
 async function pendingRefunds() {
@@ -33,21 +34,21 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
       <p className="sub">{t("edition")}: {ed.edition === "cloud" ? "cloud" : ed.valid ? `self-hosted · ${ed.licensee}` : `self-hosted · license ${ed.reason}`}</p>
 
       <h2>{t("review")}</h2>
-      {pending.length === 0 ? <p className="muted">{t("noPending")}</p> : (
+      {pending.length === 0 ? <EmptyState title={t("noPending")} hint={t("noPendingHint")} /> : (
         <table><tbody>{pending.map((p) => (
           <tr key={p.id}><td><Link href={`/${locale}/p/${p.slug}`}>{p.title}</Link><div className="muted">{p.seller.name}</div></td><td><ReviewActions productId={p.id} /></td></tr>
         ))}</tbody></table>
       )}
 
       <h2>{t("refunds")}</h2>
-      {refunds.length === 0 ? <p className="muted">{t("noPending")}</p> : (
+      {refunds.length === 0 ? <EmptyState title={t("noRefunds")} hint={t("noRefundsHint")} /> : (
         <table><tbody>{refunds.map((r) => (
           <tr key={r.id}><td><code>{r.data.input.orderId}</code></td><td><RefundDecision runId={r.id} /></td></tr>
         ))}</tbody></table>
       )}
 
       <h2>{t("traces")}</h2>
-      {traces.length === 0 ? <p className="muted">{t("noPending")}</p> : (
+      {traces.length === 0 ? <EmptyState title={t("noTraces")} hint={t("noTracesHint")} /> : (
         <table><thead><tr><th>When</th><th>Product</th><th>User</th><th>Calls</th><th>Tokens</th><th>Cost</th><th>ms</th></tr></thead><tbody>
           {traces.map((tr) => (
             <tr key={tr.id}>

@@ -1,6 +1,6 @@
 {
   "nav": { "market": "Chợ", "sell": "Bán", "account": "Tài khoản", "admin": "Quản trị", "login": "Đăng nhập", "logout": "Đăng xuất" },
-  "home": { "title": "Sản phẩm số", "subtitle": "Template, hướng dẫn và tài liệu — mỗi sản phẩm có một trợ lý đã đọc kỹ nội dung.", "empty": "Chưa có sản phẩm nào.", "free": "Miễn phí" },
+  "home": { "title": "Sản phẩm số", "subtitle": "Template, hướng dẫn và tài liệu — mỗi sản phẩm có một trợ lý đã đọc kỹ nội dung.", "empty": "Chưa có sản phẩm nào.", "emptyHint": "Sản phẩm đã đăng sẽ hiện ở đây — người bán cần gửi duyệt trước.", "free": "Miễn phí" },
   "product": {
     "by": "bởi {seller}",
     "buy": "Mua với giá {price}",
@@ -20,6 +20,7 @@
     "upgrade": "Nâng cấp Pro — {price}/tháng",
     "orders": "Đã mua",
     "noOrders": "Chưa mua gì.",
+    "noOrdersHint": "Sản phẩm bạn mua sẽ hiện ở đây, kèm link tải và yêu cầu hoàn tiền.",
     "refund": "Yêu cầu hoàn tiền",
     "refundRequested": "Đã gửi yêu cầu — quản trị viên sẽ quyết định trong 3 ngày."
   },
@@ -31,6 +32,8 @@
     "price": "Giá (cent USD, 0 = miễn phí)",
     "file": "Tài liệu (.md, .txt hoặc .pdf)",
     "create": "Gửi duyệt",
+    "noProducts": "Chưa có sản phẩm nào.",
+    "noProductsHint": "Tải tài liệu lên bên dưới để gửi duyệt; trợ lý sẽ đánh chỉ mục ngay khi nhận.",
     "status": { "DRAFT": "Nháp", "PENDING_REVIEW": "Đang duyệt", "PUBLISHED": "Đã đăng", "REJECTED": "Bị từ chối" }
   },
   "admin": {
@@ -41,7 +44,12 @@
     "refunds": "Yêu cầu hoàn tiền",
     "traces": "Lượt chạy AI",
     "edition": "Phiên bản",
-    "noPending": "Không có gì chờ."
+    "noPending": "Không có gì chờ.",
+    "noPendingHint": "Sản phẩm sẽ hiện ở đây khi người bán gửi duyệt.",
+    "noRefunds": "Không có yêu cầu hoàn tiền.",
+    "noRefundsHint": "Yêu cầu của người mua chờ ở đây ba ngày, sau đó tự động bị từ chối.",
+    "noTraces": "Chưa có lượt chạy AI nào.",
+    "noTracesHint": "Mỗi câu trả lời của trợ lý đều được ghi lại ở đây kèm token và chi phí."
   },
   "login": { "title": "Đăng nhập", "email": "Email", "role": "Vai trò", "submit": "Tiếp tục", "devNote": "Đăng nhập dev: email nào cũng được." },
   "billing": { "successTitle": "Đã nhận thanh toán", "successBody": "Đơn của bạn kích hoạt ngay khi webhook về, thường trong vòng một giây.", "cancelTitle": "Đã huỷ thanh toán", "cancelBody": "Chưa trừ tiền.", "back": "Quay lại" }

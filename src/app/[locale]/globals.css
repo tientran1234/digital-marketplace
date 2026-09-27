@@ -1,34 +1,82 @@
-:root { --bg:#fbfbfa; --fg:#1a1a1a; --muted:#6b6b6b; --line:#e4e4e0; --accent:#1a1a1a; --ok:#1f7a3a; --warn:#a15c00; --bad:#a12a2a; }
-@media (prefers-color-scheme: dark) { :root { --bg:#17171a; --fg:#f2f2f0; --muted:#a0a0a0; --line:#2e2e33; --accent:#f2f2f0; } }
+/* Design tokens. Every colour, step of space and radius in the app comes from
+   here; dark mode redefines the surface and nothing else. */
+:root {
+  --bg:#fbfbfa; --surface:#ffffff; --fg:#1a1a1a; --muted:#6b6b6b; --line:#e4e4e0; --accent:#1a1a1a;
+  --ok:#1f7a3a; --warn:#a15c00; --bad:#a12a2a;
+  --skeleton:#ececeb; --shadow-1:0 1px 2px rgb(0 0 0 / 5%), 0 6px 20px rgb(0 0 0 / 4%);
+  --space-1:4px; --space-2:8px; --space-3:12px; --space-4:16px; --space-5:24px; --space-6:40px;
+  --radius-1:8px; --radius-2:12px; --radius-3:999px;
+  --text-sm:.85rem; --text-md:.92rem; --text-lg:1.1rem; --text-xl:1.75rem;
+  --measure:56ch;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#17171a; --surface:#1e1e22; --fg:#f2f2f0; --muted:#a0a0a0; --line:#2e2e33; --accent:#f2f2f0;
+    --ok:#4caf72; --warn:#d09a3c; --bad:#e07a7a;
+    --skeleton:#2a2a30; --shadow-1:0 1px 2px rgb(0 0 0 / 40%), 0 6px 20px rgb(0 0 0 / 30%);
+  }
+}
 * { box-sizing: border-box; }
 body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
 a { color:inherit; }
-.nav { display:flex; gap:20px; align-items:center; padding:14px 20px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+.nav { display:flex; gap:var(--space-5); align-items:center; padding:var(--space-3) var(--space-5); border-bottom:1px solid var(--line); flex-wrap:wrap; }
 .nav .brand { font-weight:700; text-decoration:none; margin-right:auto; }
 .nav a { text-decoration:none; color:var(--muted); }
 .nav a:hover, .nav a.active { color:var(--fg); }
-main { max-width:960px; margin:0 auto; padding:40px 20px; }
-h1 { font-size:1.75rem; margin:0 0 6px; letter-spacing:-.02em; }
-h2 { font-size:1.1rem; margin:32px 0 12px; }
-.sub { color:var(--muted); margin:0 0 28px; max-width:56ch; }
-.grid { display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }
-.card { border:1px solid var(--line); border-radius:12px; padding:18px; text-decoration:none; display:block; }
-.card h3 { margin:0 0 6px; font-size:1rem; }
-.card p { margin:0; color:var(--muted); font-size:.92rem; }
-.price { font-weight:600; margin-top:10px; }
-button, .btn { font:inherit; padding:9px 14px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:var(--bg); cursor:pointer; text-decoration:none; display:inline-block; }
+main { max-width:960px; margin:0 auto; padding:var(--space-6) var(--space-5); }
+h1 { font-size:var(--text-xl); margin:0 0 var(--space-1); letter-spacing:-.02em; }
+h2 { font-size:var(--text-lg); margin:var(--space-6) 0 var(--space-3); }
+.sub { color:var(--muted); margin:0 0 var(--space-5); max-width:var(--measure); }
+
+/* Product grid. Cards size themselves, so one product and twenty both look
+   deliberate. */
+.grid { display:grid; gap:var(--space-4); grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }
+.card { border:1px solid var(--line); border-radius:var(--radius-2); background:var(--surface); text-decoration:none; display:flex; flex-direction:column; overflow:hidden; transition:box-shadow .15s, transform .15s; }
+.card:hover { box-shadow:var(--shadow-1); transform:translateY(-2px); }
+.card .body { padding:var(--space-4); display:flex; flex-direction:column; flex:1; }
+.card h3 { margin:0 0 var(--space-1); font-size:1rem; }
+.card p { margin:0; color:var(--muted); font-size:var(--text-md); }
+.price { font-weight:600; margin-top:auto; padding-top:var(--space-3); }
+/* Derived from the slug (src/lib/cover.ts) — a fixed ratio so a long title
+   below it never makes one card taller than its neighbours' covers. */
+.cover { aspect-ratio:16/10; display:grid; place-items:center; color:#fff; font-size:1.6rem; font-weight:700; letter-spacing:.02em; text-shadow:0 1px 2px rgb(0 0 0 / 25%); }
+
+/* Empty states: say what is missing and what to do about it, never a bare
+   line of grey text. */
+.empty { border:1px dashed var(--line); border-radius:var(--radius-2); padding:var(--space-6) var(--space-5); text-align:center; }
+.empty p { margin:0; }
+.empty .hint { color:var(--muted); font-size:var(--text-md); margin-top:var(--space-2); }
+
+button, .btn { font:inherit; padding:9px 14px; border-radius:var(--radius-1); border:1px solid var(--accent); background:var(--accent); color:var(--bg); cursor:pointer; text-decoration:none; display:inline-block; }
 button.ghost, .btn.ghost { background:transparent; color:var(--fg); border-color:var(--line); }
 button:disabled { opacity:.5; cursor:default; }
-input, textarea, select { font:inherit; width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--fg); }
-label { display:block; font-size:.9rem; color:var(--muted); margin:14px 0 4px; }
+input, textarea, select { font:inherit; width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:var(--radius-1); background:var(--surface); color:var(--fg); }
+label { display:block; font-size:var(--text-sm); color:var(--muted); margin:var(--space-3) 0 var(--space-1); }
 form { max-width:520px; }
-.row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.row { display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; }
 .muted { color:var(--muted); }
-.tag { font-size:.8rem; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+.tag { font-size:var(--text-sm); padding:2px var(--space-2); border-radius:var(--radius-3); border:1px solid var(--line); color:var(--muted); }
 .tag.ok { color:var(--ok); border-color:var(--ok); } .tag.warn { color:var(--warn); border-color:var(--warn); } .tag.bad { color:var(--bad); border-color:var(--bad); }
-table { width:100%; border-collapse:collapse; font-size:.92rem; }
-th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+table { width:100%; border-collapse:collapse; font-size:var(--text-md); }
+th, td { text-align:left; padding:var(--space-2) var(--space-1); border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--muted); font-weight:500; }
-.answer { white-space:pre-wrap; border:1px solid var(--line); border-radius:12px; padding:14px; margin-top:12px; min-height:60px; }
-.chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.answer { white-space:pre-wrap; border:1px solid var(--line); border-radius:var(--radius-2); background:var(--surface); padding:var(--space-4); margin-top:var(--space-3); min-height:60px; }
+.chips { display:flex; gap:var(--space-1); flex-wrap:wrap; margin-top:var(--space-2); }
 .err { color:var(--bad); }
+
+/* Skeleton lines for the ask box: the answer arrives token by token, so the
+   wait is long enough that a spinner would lie about it being one moment. */
+.skeleton { height:.85em; border-radius:var(--radius-1); background:linear-gradient(90deg,var(--skeleton) 25%,var(--line) 50%,var(--skeleton) 75%); background-size:280% 100%; animation: skeleton 1.4s ease-in-out infinite; }
+.skeleton + .skeleton { margin-top:var(--space-3); }
+@keyframes skeleton { from { background-position:100% 0; } to { background-position:-100% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+  .card:hover { transform:none; }
+}
+
+@media (max-width: 640px) {
+  main { padding:var(--space-5) var(--space-4); }
+  .grid { grid-template-columns:1fr; }
+  .nav { gap:var(--space-3); padding:var(--space-3) var(--space-4); }
+  h1 { font-size:1.45rem; }
+}

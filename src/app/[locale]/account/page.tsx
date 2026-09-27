@@ -6,6 +6,7 @@ import { money } from "@/lib/format";
 import { PLANS } from "@/domain/plans";
 import { getCurrentUser } from "@/server/auth";
 import { entitlementsForUser } from "@/server/billing";
+import { EmptyState } from "@/components/EmptyState";
 import { RefundButton } from "@/components/RefundButton";
 import { UpgradeButton } from "@/components/UpgradeButton";
 
@@ -29,7 +30,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
         {ent.planKey === "free" && <UpgradeButton label={t("upgrade", { price: money(PLANS.pro.priceMinor, "usd", locale) ?? "" })} />}
       </div>
       <h2>{t("orders")}</h2>
-      {orders.length === 0 ? <p className="muted">{t("noOrders")}</p> : (
+      {orders.length === 0 ? <EmptyState title={t("noOrders")} hint={t("noOrdersHint")} /> : (
         <table><thead><tr><th>Product</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>
           {orders.map((o) => (
             <tr key={o.id}>
