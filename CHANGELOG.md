@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-27
+
+- UI polish: design tokens for colour, space, radius and type (dark mode now redefines the whole surface), a responsive product grid with cover images derived from the slug rather than uploaded, empty states that say what will fill them, and loading skeletons for the ask box while retrieval runs — with screenshots in the README, so the app looks finished to the buyer who lands on it cold.
+
 ## 2026-09-26
 
 - Object storage adapter: `server/storage.ts` now picks an S3-compatible bucket (works with R2, MinIO and AWS S3, SigV4-signed with no SDK) when the `S3_*` variables are set and keeps local disk for dev, so product files survive a deploy on a host whose filesystem is ephemeral instead of vanishing from under the download route.

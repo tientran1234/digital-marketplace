@@ -86,6 +86,28 @@ the real chunker, embedder, MMR and agent prompt against an in-memory index, so
 it needs no database and no key; `EVAL_MODEL=1` swaps the extractive baseline
 for the real model. Numbers and what they mean: [`evals/README.md`](evals/README.md).
 
+## The UI
+
+<img src="docs/ui-marketplace.png" alt="The marketplace grid: product cards with derived gradient covers" width="760">
+
+Colour, space, radius and type are tokens in `app/[locale]/globals.css` and
+dark mode redefines the surface, so a change is one line rather than a
+find-and-replace. A product carries a document, not artwork, so its cover is
+derived from the slug — a fixed gradient and the title's initials, the same on
+the server and in the browser, with no column to fill and no upload to wait
+for. The grid reflows to one column on a phone.
+
+<img src="docs/ui-ask.png" alt="The ask box showing skeleton lines while the answer is still being retrieved" width="520"> <img src="docs/ui-mobile-dark.png" alt="The marketplace on a phone in dark mode" width="200">
+
+Retrieval runs before the assistant's first token, so the ask box shows
+skeleton lines rather than a spinner that lies about how long this takes —
+held still for anyone who asked for reduced motion.
+
+<img src="docs/ui-empty-states.png" alt="The admin page with all three queues empty" width="760">
+
+Every "nothing here yet" says what is missing and what will fill it, in both
+languages, instead of one grey sentence or a table of headers with no rows.
+
 ## Layout
 
 ```
@@ -93,10 +115,11 @@ src/
   domain/        pure: billing events, order + subscription state machines, plans, download access
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · fake.ts
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
+  lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
   server/        billing · workflows · assistant · auth (opaque sessions) · usage · license · storage · extract
   app/api/       checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
-  components/    the client bits: SSE reader, checkout buttons, forms
+  components/    the client bits: SSE reader, checkout buttons, forms · empty state
 tests/           domain, rag, upload extraction, storage keys + S3 signing, stripe mapping, evals, and the five end-to-end flows on real Postgres
 evals/           the assistant eval suite: questions · harness · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
