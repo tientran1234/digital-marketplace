@@ -3,6 +3,7 @@ import { ORDER_STATUSES, canTransitionOrder, orderPredecessorsOf, orderStatusFor
 import { canTransitionSubscription, subscriptionStatusForEvent } from "@/domain/subscription";
 import { canUse, entitlementsFor } from "@/domain/plans";
 import { downloadAccess } from "@/domain/access";
+import { PURCHASE_STATUSES, analyticsAccess, countsAsPurchase, countsAsView, totals } from "@/domain/analytics";
 
 describe("order state machine", () => {
   it("is forward-only", () => {
@@ -55,5 +56,40 @@ describe("download access", () => {
   it("free products need no purchase but do need to be published", () => {
     expect(downloadAccess({ userId: null, role: null, product: { ...product, priceMinor: 0 }, orderStatuses: [] })).toMatchObject({ allowed: true, reason: "free" });
     expect(downloadAccess({ userId: "b", role: "BUYER", product: { ...product, priceMinor: 0, status: "DRAFT" }, orderStatuses: [] })).toMatchObject({ allowed: false, reason: "unpublished" });
+  });
+});
+
+describe("seller analytics", () => {
+  const pro = entitlementsFor("pro", "ACTIVE");
+  const free = entitlementsFor("free", null);
+
+  it("is a Pro feature, and only for someone with listings", () => {
+    expect(analyticsAccess("SELLER", pro)).toEqual({ allowed: true });
+    expect(analyticsAccess("SELLER", free)).toMatchObject({ allowed: false, reason: "needs_pro" });
+    expect(analyticsAccess("BUYER", pro)).toMatchObject({ allowed: false, reason: "not_a_seller" });
+    expect(analyticsAccess(null, pro)).toMatchObject({ allowed: false, reason: "not_a_seller" });
+  });
+
+  it("counts a sale only while the money has stayed", () => {
+    expect(PURCHASE_STATUSES).toEqual(["PAID"]);
+    expect(countsAsPurchase("PENDING")).toBe(false);
+    expect(countsAsPurchase("EXPIRED")).toBe(false);
+    expect(countsAsPurchase("REFUNDED")).toBe(false);
+  });
+
+  it("does not count the seller looking at their own listing", () => {
+    expect(countsAsView("s1", "s1")).toBe(false);
+    expect(countsAsView("b1", "s1")).toBe(true);
+    expect(countsAsView(null, "s1")).toBe(true);
+  });
+
+  it("adds the columns up, and has zeros to show for a seller with nothing", () => {
+    expect(totals([])).toEqual({ views: 0, purchases: 0, questions: 0 });
+    expect(
+      totals([
+        { productId: "p1", slug: "a", title: "A", views: 12, purchases: 2, questions: 5 },
+        { productId: "p2", slug: "b", title: "B", views: 3, purchases: 0, questions: 1 },
+      ]),
+    ).toEqual({ views: 15, purchases: 2, questions: 6 });
   });
 });
