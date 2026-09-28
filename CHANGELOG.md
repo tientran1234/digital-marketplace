@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-28
+
+- Seller analytics (Pro feature): views, purchases and questions asked per product on the sell page, gated by `canUse(ent, "seller_analytics")` — views counted in a new per-day `ProductView` row that skips the seller's own reloads, purchases counted only while the money has stayed, and questions read from the traces the ask box already writes, so a seller can see which listing is worth another document instead of guessing.
+
 ## 2026-09-27
 
 - UI polish: design tokens for colour, space, radius and type (dark mode now redefines the whole surface), a responsive product grid with cover images derived from the slug rather than uploaded, empty states that say what will fill them, and loading skeletons for the ask box while retrieval runs — with screenshots in the README, so the app looks finished to the buyer who lands on it cold.

@@ -52,6 +52,14 @@ inside a retried step. The order's status is *not* changed by the workflow —
 it changes when `charge.refunded` arrives, through the same webhook path as
 every other status change. One place changes money state.
 
+**Measure.** The sell page shows each listing's views, purchases and questions
+asked — a Pro feature, gated by `canUse(ent, "seller_analytics")` before the
+query runs rather than after it. Two of the three numbers were already in the
+database (orders, and the traces the ask box writes); views get a `ProductView`
+row per product per UTC day, incremented in the database, and a seller
+reloading their own listing is not an audience. A purchase is money that
+stayed, so a refunded order stops counting as a sale.
+
 **Serverless worker.** There is no resident process on Vercel, so
 `POST /api/workflows/tick` processes due runs and `vercel.json` schedules it
 (daily on Hobby — point cron-job.org at it every few minutes for real use). Signals (`admin approves`) resume runs immediately without
@@ -112,11 +120,11 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription state machines, plans, download access
+  domain/        pure: billing events, order + subscription state machines, plans, download access, seller analytics
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · fake.ts
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · assistant · auth (opaque sessions) · usage · license · storage · extract
+  server/        billing · workflows · assistant · auth (opaque sessions) · usage · analytics · license · storage · extract
   app/api/       checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state

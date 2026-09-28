@@ -7,6 +7,6 @@ One item per pull request, in order.
 - [x] PDF uploads: parse to text (`pdf-parse`) in the upload route; chunker unchanged.
 - [x] Object storage adapter: `server/storage.ts` on S3-compatible storage (works with Vercel Blob / R2), local disk stays for dev.
 - [x] UI polish: design tokens, responsive product grid with cover images, empty states, loading skeletons for the ask box. Screenshots in README.
-- [ ] Seller analytics (Pro feature): views, purchases, questions asked per product; uses `canUse(ent, "seller_analytics")`.
+- [x] Seller analytics (Pro feature): views, purchases, questions asked per product; uses `canUse(ent, "seller_analytics")`.
 - [ ] Auth.js magic-link sign-in replacing the dev login route; sessions table stays.
 - [ ] Playwright end-to-end: buy → webhook → download; ask → cited answer (FakeProvider via env).
