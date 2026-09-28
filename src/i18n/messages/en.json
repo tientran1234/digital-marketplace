@@ -34,6 +34,11 @@
     "create": "Submit for review",
     "noProducts": "No products yet.",
     "noProductsHint": "Upload a document below and it goes to review; the assistant indexes it on the way.",
+    "analytics": "How your products are doing",
+    "analyticsHint": "Views of the listing (yours are not counted), purchases that were not refunded, and questions buyers asked the assistant.",
+    "analyticsPro": "Views, purchases and questions per product come with Pro.",
+    "upgrade": "Upgrade to Pro — {price}/month",
+    "total": "All products",
     "status": { "DRAFT": "Draft", "PENDING_REVIEW": "In review", "PUBLISHED": "Published", "REJECTED": "Rejected" }
   },
   "admin": {

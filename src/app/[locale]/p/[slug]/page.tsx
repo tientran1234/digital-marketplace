@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 import { downloadAccess } from "@/domain/access";
 import { getCurrentUser } from "@/server/auth";
+import { recordProductView } from "@/server/analytics";
 import { entitlementsForUser } from "@/server/billing";
 import { currentPeriod } from "@/server/usage";
 import { AskBox } from "@/components/AskBox";
@@ -22,6 +23,10 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
   const access = downloadAccess({ userId: user?.id ?? null, role: user?.role ?? null, product, orderStatuses: orders.map((o) => o.status) });
   const visible = product.status === "PUBLISHED" || access.allowed;
   if (!visible) return <p className="muted">{t("unpublished")}</p>;
+
+  // Only a published listing has an audience to count, and a counter that
+  // fails must never take the page the buyer came for down with it.
+  if (product.status === "PUBLISHED") await recordProductView(product, user?.id ?? null).catch(() => {});
 
   const price = money(product.priceMinor, product.currency, locale);
   let quota: { used: number; limit: number } | null = null;

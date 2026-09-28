@@ -64,6 +64,7 @@ model Product {
   chunks      ProductChunk[]
   orders      Order[]
   traces      AgentTrace[]
+  views       ProductView[]
   /// The durable-workflow run that owns this product's review, if any.
   reviewRunId String?
   createdAt   DateTime       @default(now())
@@ -131,6 +132,17 @@ model WebhookEvent {
   provider        String
   type            String
   receivedAt      DateTime @default(now())
+}
+
+/// Views of a product, counted per UTC day. One row a day rather than one row
+/// a visit: the seller's report asks for a total, not for a log of who looked.
+model ProductView {
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  day       String
+  count     Int     @default(0)
+
+  @@id([productId, day])
 }
 
 /// Metered usage per user, per feature, per UTC month.

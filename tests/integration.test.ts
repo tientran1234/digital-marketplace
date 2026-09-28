@@ -13,6 +13,7 @@ import { HashEmbedder, indexProduct, retrieve } from "@/rag";
 import { FakeBillingProvider } from "@/providers/fake";
 import { setBillingProviderForTests } from "@/server/provider";
 import { applyEvent, entitlementsForUser, startOrderCheckout } from "@/server/billing";
+import { recordProductView, sellerAnalytics } from "@/server/analytics";
 import { engine, productReview, refundRequest, workflowStore } from "@/server/workflows";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
 import { currentPeriod } from "@/server/usage";
@@ -92,6 +93,28 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     expect(chunks).toHaveLength(2);
     const passages = await retrieve(productId, "how many days for a refund", new HashEmbedder(), { k: 1 });
     expect(passages[0]?.content).toMatch(/fourteen days/);
+  });
+
+  it("seller analytics: an audience that excludes the seller, sales that survived a refund, questions from traces", async () => {
+    const quiet = await db.product.create({ data: { sellerId, slug: "quiet", title: "Quiet", description: "Nobody has looked at this one", priceMinor: 500, status: "PUBLISHED", fileKey: "q/q.md" } });
+    for (const viewer of [buyerId, null, sellerId]) await recordProductView({ id: productId, sellerId }, viewer);
+
+    const kept = await startOrderCheckout(buyerId, productId);
+    await applyEvent("fake", { providerEventId: "a1", type: "order_paid", checkoutRef: `cs_fake_${kept.orderId}`, providerRef: "pi_a1" });
+    const returned = await startOrderCheckout(buyerId, productId);
+    await applyEvent("fake", { providerEventId: "a2", type: "order_paid", checkoutRef: `cs_fake_${returned.orderId}`, providerRef: "pi_a2" });
+    await applyEvent("fake", { providerEventId: "a3", type: "order_refunded", providerRef: "pi_a2" });
+    await startOrderCheckout(buyerId, productId); // never paid for
+    await db.agentTrace.create({ data: { runId: "run_a1", userId: buyerId, productId, status: "ok", modelCalls: 2, toolCalls: 1, inputTokens: 100, outputTokens: 20, costUsd: 0.001, durationMs: 42, spans: [] } });
+
+    const rows = await sellerAnalytics(sellerId);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.productId === productId)).toMatchObject({ views: 2, purchases: 1, questions: 1 });
+    expect(rows.find((r) => r.productId === quiet.id)).toMatchObject({ views: 0, purchases: 0, questions: 0 });
+
+    // One seller's report never reaches into another's listings.
+    const other = await db.user.create({ data: { email: "s2@t.test", name: "Other", role: "SELLER" } });
+    expect(await sellerAnalytics(other.id)).toEqual([]);
   });
 
   it("assistant: gated by quota, calls search_docs, and leaves a trace with cost", async () => {

@@ -34,6 +34,11 @@
     "create": "Gửi duyệt",
     "noProducts": "Chưa có sản phẩm nào.",
     "noProductsHint": "Tải tài liệu lên bên dưới để gửi duyệt; trợ lý sẽ đánh chỉ mục ngay khi nhận.",
+    "analytics": "Sản phẩm của bạn đang ra sao",
+    "analyticsHint": "Lượt xem trang sản phẩm (không tính lượt của bạn), lượt mua chưa bị hoàn tiền, và số câu người mua đã hỏi trợ lý.",
+    "analyticsPro": "Lượt xem, lượt mua và số câu hỏi theo từng sản phẩm có trong gói Pro.",
+    "upgrade": "Nâng cấp Pro — {price}/tháng",
+    "total": "Tất cả sản phẩm",
     "status": { "DRAFT": "Nháp", "PENDING_REVIEW": "Đang duyệt", "PUBLISHED": "Đã đăng", "REJECTED": "Bị từ chối" }
   },
   "admin": {
