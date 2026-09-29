@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-29
+
+- Magic-link sign-in replacing the dev login route; the sessions table stays exactly as it was — an emailed link that works once and for fifteen minutes is now the only way in, the account is created when the link is clicked rather than when the address is typed, and a link can no longer hand out a role, so the shortcut that signed anyone in as an admin is gone rather than hidden behind an environment variable.
+
 ## 2026-09-28
 
 - Seller analytics (Pro feature): views, purchases and questions asked per product on the sell page, gated by `canUse(ent, "seller_analytics")` — views counted in a new per-day `ProductView` row that skips the seller's own reloads, purchases counted only while the money has stayed, and questions read from the traces the ask box already writes, so a seller can see which listing is worth another document instead of guessing.

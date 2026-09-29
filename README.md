@@ -25,6 +25,19 @@ local disk in dev, an S3-compatible bucket (R2, MinIO, AWS S3) wherever the
 
 ## Flows
 
+**Sign in.** `POST /api/auth/request-link` answers 204 for every address — a
+different answer for one that has an account would list our customers — and
+emails a link. Only the link's SHA-256 is stored: the link itself is already
+in a mailbox and in whatever logged the URL, so the row on its own opens
+nothing. `GET /api/auth/callback` redeems it — valid, consumed or expired,
+decided in `domain/magic-link.ts` — and claims it with an `UPDATE … WHERE
+consumedAt IS NULL`, so two clicks leave one winner, the same way the webhook
+table's insert is the lock. The account is created there rather than when the
+address was typed, because until the link comes back all anyone has done is
+type an address. It is created as a BUYER: a link proves an address, it does
+not hand out a role. What comes out is the same opaque session row in the same
+table as before.
+
 **Buy.** `POST /api/checkout/order` persists a `PENDING` order *before*
 calling Stripe, so a webhook that beats the response still finds it. Stripe's
 `checkout.session.completed` arrives at `POST /api/webhooks/stripe`: raw body
@@ -72,18 +85,23 @@ pnpm install
 cp .env.example .env            # DATABASE_URL needs pgvector; Neon has it, so does `pnpm db:up`
 pnpm db:setup                   # Prisma schema + vector extension + workflow table
 pnpm db:seed                    # three users, two indexed products — no API keys needed
-pnpm dev                        # http://localhost:3000/en  (sign in as buyer/seller/admin@example.test)
+pnpm dev                        # http://localhost:3000/en  (sign-in links print to this terminal)
 ```
 
 With keys: `ANTHROPIC_API_KEY` turns on the real assistant (Claude via
 agent-runtime), `VOYAGE_API_KEY` turns on real embeddings (without it, a
 bag-of-words hasher stands in — fine for a demo, useless for real search),
 `STRIPE_*` turns on real checkout (`pnpm stripe:listen` for the webhook), and
-`S3_*` moves product files off the local disk into a bucket. Setting some but
-not all of the `S3_*` variables is an error rather than a fallback to disk.
+`S3_*` moves product files off the local disk into a bucket, and
+`RESEND_API_KEY` + `MAIL_FROM` send sign-in links as real email instead of
+printing them. Setting some but not all of the `S3_*` variables — or one of
+the two mail variables — is an error rather than a fallback.
+
+Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
+the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 24 unit tests anywhere; 5 flow tests need DATABASE_URL
+pnpm test                       # 77 unit tests anywhere; 13 flow tests need DATABASE_URL
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
 pnpm typecheck && pnpm build
 ```
@@ -120,22 +138,23 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription state machines, plans, download access, seller analytics
-  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · fake.ts
+  domain/        pure: billing events, order + subscription state machines, plans, download access, seller analytics, sign-in link rules
+  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · assistant · auth (opaque sessions) · usage · analytics · license · storage · extract
-  app/api/       checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
+  server/        billing · workflows · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state
-tests/           domain, rag, upload extraction, storage keys + S3 signing, stripe mapping, evals, and the five end-to-end flows on real Postgres
+tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, and the end-to-end flows on real Postgres
 evals/           the assistant eval suite: questions · harness · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 ```
 
 ## What is deliberately not here
 
-- **Real sign-in.** Sessions are real (opaque id, server-side row, httpOnly);
-  the login route is a dev shortcut. Swap it for Auth.js / magic links; nothing
-  that reads sessions changes.
+- **Passwords and OAuth.** Sign-in is an emailed link and nothing else. There
+  is no password to leak, reset or rate-limit, and no provider buttons to keep
+  working. A product that needs "Sign in with Google" needs another way into
+  `issueSession`, not another session layer.
 - **Seller payouts.** Stripe Connect is a project of its own.
