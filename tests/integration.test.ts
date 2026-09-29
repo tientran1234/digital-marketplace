@@ -17,6 +17,10 @@ import { recordProductView, sellerAnalytics } from "@/server/analytics";
 import { engine, productReview, refundRequest, workflowStore } from "@/server/workflows";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
 import { currentPeriod } from "@/server/usage";
+import { issueSession } from "@/server/auth";
+import { setMailerForTests, type Email } from "@/server/mail";
+import { MAX_REQUESTS, LINK_TTL_MS } from "@/domain/magic-link";
+import { hashLoginToken, redeemSignInLink, requestSignInLink } from "@/server/magic-link";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 
@@ -158,5 +162,81 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     await expect(askAboutProduct({ user, product, question: "How much is it?", onEvent })).rejects.toThrow("provider is down");
     expect(seen.join("")).toBe("Let me check the listing.");
     expect(await used()).toBe(1);
+  });
+});
+
+describe.skipIf(!hasDb)("magic-link sign-in", () => {
+  const outbox: Email[] = [];
+  /** The token is only ever in the email, so the email is where the test has to read it from too. */
+  const tokenFrom = (message: Email) => new URL(/https?:\/\/\S+/.exec(message.text)![0]).searchParams.get("token")!;
+
+  beforeAll(() => {
+    setMailerForTests({ name: "log", async send(message) { outbox.push(message); } });
+  });
+  beforeEach(async () => {
+    outbox.length = 0;
+    await db.loginToken.deleteMany();
+    await db.user.deleteMany();
+  });
+
+  it("signs in an address that has never been here, as a buyer", async () => {
+    await requestSignInLink("new@example.test", "en");
+    expect(outbox).toHaveLength(1);
+
+    // Nothing exists until the link comes back: otherwise anyone who can type
+    // an address can fill the user table with addresses they do not own.
+    expect(await db.user.count()).toBe(0);
+
+    const result = await redeemSignInLink(tokenFrom(outbox[0]!));
+    expect(result).toMatchObject({ ok: true, locale: "en" });
+    expect(result.ok && result.user.role).toBe("BUYER");
+
+    const cookie = await issueSession((result as { user: { id: string } }).user.id);
+    expect(await db.session.findUnique({ where: { id: cookie.value } })).not.toBeNull();
+  });
+
+  it("keeps the role the account already had", async () => {
+    await db.user.create({ data: { email: "boss@example.test", name: "Boss", role: "ADMIN" } });
+    await requestSignInLink("boss@example.test", "vi");
+    const result = await redeemSignInLink(tokenFrom(outbox[0]!));
+    expect(result).toMatchObject({ ok: true, locale: "vi" });
+    expect(result.ok && result.user.role).toBe("ADMIN");
+  });
+
+  it("works once", async () => {
+    await requestSignInLink("once@example.test", "en");
+    const token = tokenFrom(outbox[0]!);
+    expect(await redeemSignInLink(token)).toMatchObject({ ok: true });
+
+    const sessions = await db.session.count();
+    expect(await redeemSignInLink(token)).toEqual({ ok: false, reason: "consumed" });
+    expect(await db.session.count()).toBe(sessions);
+  });
+
+  it("stops working after its window, and a token nobody issued never worked", async () => {
+    await requestSignInLink("late@example.test", "en");
+    const token = tokenFrom(outbox[0]!);
+    expect(await redeemSignInLink(token, new Date(Date.now() + LINK_TTL_MS + 1))).toEqual({ ok: false, reason: "expired" });
+    expect(await redeemSignInLink("not-a-token")).toEqual({ ok: false, reason: "unknown" });
+    expect(await db.user.count()).toBe(0);
+  });
+
+  /** The row is a fingerprint of the link; reading the table must not hand anyone a way in. */
+  it("never writes the token itself down", async () => {
+    await requestSignInLink("hash@example.test", "en");
+    const token = tokenFrom(outbox[0]!);
+    const row = await db.loginToken.findFirstOrThrow();
+    expect(row.tokenHash).not.toBe(token);
+    expect(row.tokenHash).toBe(hashLoginToken(token));
+  });
+
+  it("stops sending after a mailbox has asked enough times", async () => {
+    for (let i = 0; i < MAX_REQUESTS + 3; i++) await requestSignInLink("keen@example.test", "en");
+    expect(outbox).toHaveLength(MAX_REQUESTS);
+    expect(await db.loginToken.count()).toBe(MAX_REQUESTS);
+
+    // Per address: someone else's sign-in is not collateral damage.
+    await requestSignInLink("other@example.test", "en");
+    expect(outbox).toHaveLength(MAX_REQUESTS + 1);
   });
 });

@@ -15,18 +15,15 @@ const schema = z.object({
   S3_REGION: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
   LICENSE_TOKEN: z.string().optional(),
   LICENSE_PUBLIC_KEY: z.string().optional(),
   WORKFLOW_TICK_SECRET: z.string().optional(),
-  ALLOW_DEV_LOGIN: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | null = null;
 export function env() {
   if (!cached) cached = schema.parse(process.env);
   return cached;
-}
-
-export function devLoginEnabled(): boolean {
-  return process.env.NODE_ENV !== "production" || env().ALLOW_DEV_LOGIN === "1";
 }

@@ -56,6 +56,17 @@
     "noTraces": "No AI runs yet.",
     "noTracesHint": "Every answer the assistant streams is recorded here with its tokens and cost."
   },
-  "login": { "title": "Sign in", "email": "Email", "role": "Role", "submit": "Continue", "devNote": "Development sign-in: any email works." },
+  "login": {
+    "title": "Sign in",
+    "email": "Email",
+    "submit": "Email me a link",
+    "sent": "Check your email",
+    "sentHint": "If {email} has an account here, a sign-in link is on its way. It works once, and for 15 minutes.",
+    "linkError": "That link has already been used or has expired. Ask for a new one.",
+    "mail": {
+      "subject": "Your sign-in link",
+      "body": "Sign in to the marketplace:\n\n{link}\n\nThe link works once, and for 15 minutes. If you did not ask for it, nothing has happened — ignore this email."
+    }
+  },
   "billing": { "successTitle": "Payment received", "successBody": "Your purchase activates as soon as the webhook lands — usually within a second.", "cancelTitle": "Checkout cancelled", "cancelBody": "Nothing was charged.", "back": "Back" }
 }

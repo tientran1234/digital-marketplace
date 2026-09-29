@@ -56,6 +56,17 @@
     "noTraces": "Chưa có lượt chạy AI nào.",
     "noTracesHint": "Mỗi câu trả lời của trợ lý đều được ghi lại ở đây kèm token và chi phí."
   },
-  "login": { "title": "Đăng nhập", "email": "Email", "role": "Vai trò", "submit": "Tiếp tục", "devNote": "Đăng nhập dev: email nào cũng được." },
+  "login": {
+    "title": "Đăng nhập",
+    "email": "Email",
+    "submit": "Gửi liên kết cho tôi",
+    "sent": "Kiểm tra email của bạn",
+    "sentHint": "Nếu {email} có tài khoản ở đây, liên kết đăng nhập đang được gửi tới. Liên kết dùng được một lần, trong 15 phút.",
+    "linkError": "Liên kết đã được dùng hoặc đã hết hạn. Hãy yêu cầu một liên kết mới.",
+    "mail": {
+      "subject": "Liên kết đăng nhập của bạn",
+      "body": "Đăng nhập vào marketplace:\n\n{link}\n\nLiên kết dùng được một lần, trong 15 phút. Nếu bạn không yêu cầu thì không có gì xảy ra — hãy bỏ qua email này."
+    }
+  },
   "billing": { "successTitle": "Đã nhận thanh toán", "successBody": "Đơn của bạn kích hoạt ngay khi webhook về, thường trong vòng một giây.", "cancelTitle": "Đã huỷ thanh toán", "cancelBody": "Chưa trừ tiền.", "back": "Quay lại" }
 }

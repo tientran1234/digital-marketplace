@@ -2,21 +2,32 @@ import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import type { Role, User } from "@prisma/client";
 import { db } from "@/lib/db";
-import { devLoginEnabled } from "@/lib/env";
 
 const COOKIE = "dm_session";
 const TTL_MS = 30 * 24 * 3600_000;
 
+export type SessionCookie = {
+  name: string;
+  value: string;
+  options: { httpOnly: true; sameSite: "lax"; secure: boolean; expires: Date; path: string };
+};
+
 /**
  * Opaque server-side sessions: a random id in an httpOnly cookie, the row in
- * Postgres. Nothing to forge, revocation is a DELETE. Swap the login route for
- * Auth.js / Clerk / magic links without touching anything that reads sessions.
+ * Postgres. Nothing to forge, revocation is a DELETE.
+ *
+ * The cookie is handed back rather than written here, because the one caller
+ * is a redirect that has to carry it on the same response it redirects with.
  */
-export async function createSession(userId: string): Promise<void> {
-  const id = randomBytes(32).toString("base64url");
+export async function issueSession(userId: string): Promise<SessionCookie> {
+  const value = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + TTL_MS);
-  await db.session.create({ data: { id, userId, expiresAt } });
-  (await cookies()).set(COOKIE, id, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", expires: expiresAt, path: "/" });
+  await db.session.create({ data: { id: value, userId, expiresAt } });
+  return {
+    name: COOKIE,
+    value,
+    options: { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", expires: expiresAt, path: "/" },
+  };
 }
 
 export async function getCurrentUser(): Promise<User | null> {
@@ -46,16 +57,4 @@ export async function logout(): Promise<void> {
   const id = jar.get(COOKIE)?.value;
   if (id) await db.session.deleteMany({ where: { id } });
   jar.delete(COOKIE);
-}
-
-/** Dev-only sign-in by email. Disabled in production unless ALLOW_DEV_LOGIN=1 (demo deployments). */
-export async function devLogin(email: string, role: Role): Promise<User> {
-  if (!devLoginEnabled()) throw new AuthError(403, "dev login is disabled");
-  const user = await db.user.upsert({
-    where: { email },
-    create: { email, name: email.split("@")[0] ?? email, role },
-    update: { role },
-  });
-  await createSession(user.id);
-  return user;
 }
