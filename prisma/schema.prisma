@@ -39,6 +39,25 @@ model Session {
   @@index([userId])
 }
 
+/// An outstanding sign-in link. Only the SHA-256 of the token is here: the
+/// token itself lives in the email and in the URL the click carries, both of
+/// which get logged by things we do not own, so the row on its own is not a
+/// key to anything. No relation to User — a link can be asked for by an
+/// address that has no account yet, and the account is created when the link
+/// is clicked rather than when it is requested.
+model LoginToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  email      String
+  /// The locale the link was asked for in, so the click lands in that language.
+  locale     String
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([email, createdAt])
+}
+
 enum ProductStatus {
   DRAFT
   PENDING_REVIEW
