@@ -10,3 +10,14 @@ One item per pull request, in order.
 - [x] Seller analytics (Pro feature): views, purchases, questions asked per product; uses `canUse(ent, "seller_analytics")`.
 - [x] Magic-link sign-in replacing the dev login route; sessions table stays.
 - [ ] Playwright end-to-end: buy → webhook → download; ask → cited answer (FakeProvider via env).
+
+## Batch 2 — set by the owner, 30 Sep 2026
+
+Same rule: one item per change, in order.
+
+- [ ] Seller payouts with Stripe Connect Express: onboarding link, a transfer per PAID order minus the platform fee, payout status on the seller page; a refund reverses the transfer — every money movement inside a durable workflow.
+- [ ] Reviews and ratings: only buyers with a PAID order may review, one review per purchase, a moderation queue in admin; average rating on the product card.
+- [ ] Hybrid search: Postgres full-text plus pgvector fused with reciprocal rank fusion over title, description and chunks; the eval suite gains a search-relevance section.
+- [ ] Conversation memory: persist each buyer–product thread, show history on the product page, feed it through agent-runtime's memory with summarisation when it grows past the budget.
+- [ ] Localised listings: title and description per locale (vi/en) with fallback; sellers edit both; the assistant answers in the buyer's locale using the matching text.
+- [ ] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.
