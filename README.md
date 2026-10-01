@@ -101,10 +101,25 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 77 unit tests anywhere; 13 flow tests need DATABASE_URL
+pnpm test                       # 83 unit tests anywhere; 13 flow tests need DATABASE_URL
+pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
 pnpm typecheck && pnpm build
 ```
+
+**End to end.** `e2e/` drives a production build in a browser: buy → webhook
+→ download, and ask → cited answer. It covers the seams the flow tests reach
+past — the button posting to the checkout route, the webhook arriving as raw
+signed bytes, the file landing on disk, the agent's tool call and citations
+arriving over SSE. Stripe, the model and the embedder are the same doubles the
+flow tests inject, selected here by `FAKE_PROVIDERS=1` because a browser
+cannot reach into the process to install them; a real key alongside that flag
+is an error rather than a silent preference either way. The stand-in model can
+only quote what `search_docs` returned, so the ask spec takes the passage the
+answer cites and looks for it in the product's own chunks: an answer that is
+not in pgvector is an answer that did not come from the document. Sign-in is
+the real emailed link, read off the server's log — the only place it exists
+outside a mailbox, since the database keeps its SHA-256.
 
 **Evals.** `evals/` asks forty questions of the two seed documents, each one
 naming the passage that answers it and the fact the answer must carry. It runs
@@ -139,14 +154,15 @@ languages, instead of one grey sentence or a table of headers with no rows.
 ```
 src/
   domain/        pure: billing events, order + subscription state machines, plans, download access, seller analytics, sign-in link rules
-  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts
+  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
   server/        billing · workflows · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
   app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state
-tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, and the end-to-end flows on real Postgres
+tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows on real Postgres
+e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
 evals/           the assistant eval suite: questions · harness · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 ```

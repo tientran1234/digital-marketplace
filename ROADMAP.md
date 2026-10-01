@@ -9,7 +9,7 @@ One item per pull request, in order.
 - [x] UI polish: design tokens, responsive product grid with cover images, empty states, loading skeletons for the ask box. Screenshots in README.
 - [x] Seller analytics (Pro feature): views, purchases, questions asked per product; uses `canUse(ent, "seller_analytics")`.
 - [x] Magic-link sign-in replacing the dev login route; sessions table stays.
-- [ ] Playwright end-to-end: buy → webhook → download; ask → cited answer (FakeProvider via env).
+- [x] Playwright end-to-end: buy → webhook → download; ask → cited answer (FakeProvider via env).
 
 ## Batch 2 — set by the owner, 30 Sep 2026
 

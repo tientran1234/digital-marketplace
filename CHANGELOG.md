@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-01
+
+- Playwright end-to-end: buy → webhook → download and ask → cited answer in a real browser against a real build, with Stripe and the model served by the existing doubles through a new `FAKE_PROVIDERS=1` (a browser cannot reach in with `setBillingProviderForTests`, and a real key alongside the flag is an error rather than a silent preference) — so the seams the flow tests reach past are covered too: the checkout redirect, the webhook as raw signed bytes over HTTP, the file landing on disk, and the agent's citations arriving over SSE out of the product's own chunks.
+
 ## 2026-09-29
 
 - Magic-link sign-in replacing the dev login route; the sessions table stays exactly as it was — an emailed link that works once and for fifteen minutes is now the only way in, the account is created when the link is clicked rather than when the address is typed, and a link can no longer hand out a role, so the shortcut that signed anyone in as an admin is gone rather than hidden behind an environment variable.
