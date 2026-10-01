@@ -9,7 +9,8 @@
  * pgvector, so the suite needs no database and the SQL stays covered by the
  * integration test.
  */
-import { FakeProvider, callTools, reply, runAgent, type ModelProvider, type ModelRequest } from "agent-runtime";
+import { runAgent, type ModelProvider } from "agent-runtime";
+import { extractiveBaseline } from "../src/providers/fake.js";
 import { HashEmbedder, chunkDocument, cosine, retrieve, type ChunkSearch, type Embedder, type StoredChunk } from "../src/rag/index.js";
 import { assistantAgent } from "../src/server/assistant.js";
 import { seedDocs } from "../scripts/seed-docs.js";
@@ -17,9 +18,6 @@ import { answerable, questions, type EvalQuestion } from "./questions.js";
 
 /** Passages retrieved per question — the 5 of recall@5, and what the agent sees. */
 export const K = 5;
-
-/** How many of them the baseline quotes back. Three is what a short answer would draw on. */
-export const QUOTED = 3;
 
 /** Phrasings that count as "the documents do not say". */
 const REFUSAL = /\b(do(?:es)?n'?t|do not|does not|no|not|nothing|cannot|can'?t|unable)\b[^.]{0,60}\b(cover|covers|covered|says?|mentions?|mentioned|contains?|includes?|addresse?s?|discusse?s?|answers?|information|passages?|documents?)\b/i;
@@ -37,34 +35,6 @@ export async function memoryIndex(embedder: Embedder): Promise<ChunkSearch> {
       .map((c) => ({ ...c, score: cosine(query, c.vector) }))
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
-}
-
-/**
- * The stand-in for a model in CI: search once, quote the passages that came
- * back. It cannot reason and — the part that matters — it cannot invent, so
- * every point it loses is a point the pipeline lost and the score moves only
- * when the pipeline moves.
- *
- * It also never refuses: with a bag-of-words embedder the similarity of an
- * unanswerable question to its nearest chunk lands squarely inside the range
- * the answerable ones occupy, so there is no threshold to refuse on. Refusal
- * is a judgement, which is why it is scored under EVAL_MODEL=1 and only
- * checked for fabrication here.
- */
-export function extractiveBaseline(question: string): ModelProvider {
-  const answer = (request: ModelRequest) =>
-    reply(
-      lastToolResult(request).split("\n\n").slice(0, QUOTED).map((p) => p.replace(/^\[(\d+)\]\s*\([^)]*\)\s*/, "[$1] ")).join(" "),
-      { inputTokens: 400, outputTokens: 120 },
-    );
-  return new FakeProvider([() => callTools([{ name: "search_docs", input: { query: question }, id: "s1" }]), answer], "extractive-baseline");
-}
-
-function lastToolResult(request: ModelRequest): string {
-  for (const message of [...request.messages].reverse()) {
-    for (const part of message.content) if (part.type === "tool_result") return part.content;
-  }
-  return "";
 }
 
 export interface QuestionResult {

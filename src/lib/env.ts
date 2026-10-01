@@ -20,6 +20,8 @@ const schema = z.object({
   LICENSE_TOKEN: z.string().optional(),
   LICENSE_PUBLIC_KEY: z.string().optional(),
   WORKFLOW_TICK_SECRET: z.string().optional(),
+  /** `1` serves the in-memory billing provider and the extractive model; see providers/fake.ts. */
+  FAKE_PROVIDERS: z.string().optional(),
 });
 
 let cached: z.infer<typeof schema> | null = null;

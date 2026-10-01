@@ -18,6 +18,7 @@ import type { Product, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { canUse } from "@/domain/plans";
+import { extractiveBaseline, fakesRequested } from "@/providers/fake";
 import { HashEmbedder, VoyageEmbedder, retrieve, type ChunkSearch, type Embedder } from "@/rag";
 import { entitlementsForUser } from "./billing";
 import { meter, refundMeter } from "./usage";
@@ -52,8 +53,10 @@ export function setEmbedderForTests(e: Embedder | null) {
   embedderOverride = e;
 }
 
-function modelProvider(): ModelProvider {
+/** Takes the question because the extractive stand-in has no way to invent one to search with. */
+function modelProvider(question: string): ModelProvider {
   if (modelOverride) return modelOverride;
+  if (fakesRequested(env())) return extractiveBaseline(question);
   if (!env().ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   return new AnthropicProvider({ model: "claude-opus-5", effort: "medium", maxTokens: 4_000 });
 }
@@ -146,7 +149,7 @@ export async function askAboutProduct({ user, product, question, onEvent }: AskI
 
   try {
     return await runAgent({
-      provider: modelProvider(),
+      provider: modelProvider(question),
       ...assistantAgent(product),
       input: question,
       tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),
