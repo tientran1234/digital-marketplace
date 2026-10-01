@@ -21,7 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: pnpm }
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm db:setup
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # `playwright test` rather than `pnpm test:e2e`: the build it wraps has just run.
+      - run: pnpm exec playwright test

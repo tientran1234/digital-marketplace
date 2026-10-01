@@ -11,6 +11,7 @@
     "test": "vitest run",
     "eval": "tsx evals/run.ts",
     "test:watch": "vitest",
+    "test:e2e": "pnpm build && playwright test",
     "db:push": "prisma db push",
     "db:setup": "tsx scripts/setup-db.ts",
     "db:seed": "tsx scripts/seed.ts",
@@ -33,6 +34,7 @@
     "zod": "^4.6.0"
   },
   "devDependencies": {
+    "@playwright/test": "1.56.0",
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.10",
     "@types/react": "^19.0.0",
