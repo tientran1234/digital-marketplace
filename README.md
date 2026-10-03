@@ -3,15 +3,15 @@
 A marketplace for digital products where every listing comes with an
 assistant that has actually read it. Sellers upload a document, buyers purchase
 it once or subscribe, and questions get answered from the document itself —
-with citations. Reviews and refunds are durable workflows that wait for a
-human. English and Vietnamese.
+with citations. Reviews, refunds and seller payouts are durable workflows that
+wait — for a human, or for an onboarding to finish. English and Vietnamese.
 
 Built on four libraries extracted from it:
 
 | Library | What it owns here |
 |---|---|
 | [agent-runtime](https://github.com/tientran1234/agent-runtime) | the "ask about this product" agent: tools, quota gate, streaming, tracing with cost |
-| [durable-workflow](https://github.com/tientran1234/durable-workflow) | product review (waits up to 7 days for an admin) and refunds (waits for a decision, then calls the provider with retries) |
+| [durable-workflow](https://github.com/tientran1234/durable-workflow) | product review (waits up to 7 days for an admin), refunds (waits for a decision, then calls the provider with retries) and seller payouts (wait for onboarding, transfer, reverse) |
 | [subscription-billing](https://github.com/tientran1234/subscription-billing) | the billing design: idempotent webhooks, forward-only state machines, entitlements derived on read |
 | [offline-license](https://github.com/tientran1234/offline-license) | the self-hosted edition: admin area gated by a signed license, no phone-home |
 
@@ -65,6 +65,19 @@ inside a retried step. The order's status is *not* changed by the workflow —
 it changes when `charge.refunded` arrives, through the same webhook path as
 every other status change. One place changes money state.
 
+**Pay out.** A paid order owes its seller the price minus the platform's 10% —
+`domain/payout.ts` does the split, rounding the fee down so the two halves add
+back up to exactly what the buyer paid. The `seller-payout` run writes that
+down before anything moves, and if the seller has not finished Stripe Connect
+onboarding it parks with no timeout at all, because what someone has earned
+does not expire; `account.updated` then signals it rather than leaving the money
+for the next tick. The transfer is one retried step keyed by the payout id, so a
+step that runs twice pays once. A refund starts `payout-reversal`, which reverses
+the transfer if there was one and otherwise cancels the payout and stops the run
+still waiting on it — onboarding finished after a refund does not pay for a sale
+that was given back. Both runs start where the order's status changes, because
+that is the one place money state moves.
+
 **Measure.** The sell page shows each listing's views, purchases and questions
 asked — a Pro feature, gated by `canUse(ent, "seller_analytics")` before the
 query runs rather than after it. Two of the three numbers were already in the
@@ -101,7 +114,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 83 unit tests anywhere; 13 flow tests need DATABASE_URL
+pnpm test                       # 91 unit tests anywhere; 15 flow tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
 pnpm typecheck && pnpm build
@@ -153,12 +166,12 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription state machines, plans, download access, seller analytics, sign-in link rules
+  domain/        pure: billing events, order + subscription + payout state machines, the fee split, plans, download access, seller analytics, sign-in link rules
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
-  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, admin, workflows/tick
+  server/        billing · workflows · payouts · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, seller/payouts, admin, workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state
 tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows on real Postgres
@@ -173,4 +186,3 @@ scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
   is no password to leak, reset or rate-limit, and no provider buttons to keep
   working. A product that needs "Sign in with Google" needs another way into
   `issueSession`, not another session layer.
-- **Seller payouts.** Stripe Connect is a project of its own.

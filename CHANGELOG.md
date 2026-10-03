@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-03
+
+- Seller payouts with Stripe Connect Express: an onboarding link from the sell page, a transfer per PAID order minus the platform fee, and payout status beside the seller's own numbers — every money movement inside a durable workflow, so a sale parks until the seller's account can receive it rather than being forgotten, a retried transfer pays once, and a refund reverses the transfer (or cancels a payout that never moved) through the same webhook path that changes the order.
+
 ## 2026-10-01
 
 - Playwright end-to-end: buy → webhook → download and ask → cited answer in a real browser against a real build, with Stripe and the model served by the existing doubles through a new `FAKE_PROVIDERS=1` (a browser cannot reach in with `setBillingProviderForTests`, and a real key alongside the flag is an error rather than a silent preference) — so the seams the flow tests reach past are covered too: the checkout redirect, the webhook as raw signed bytes over HTTP, the file landing on disk, and the agent's citations arriving over SSE out of the product's own chunks.
