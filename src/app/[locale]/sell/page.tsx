@@ -5,9 +5,12 @@ import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 import { analyticsAccess, totals } from "@/domain/analytics";
 import { PLANS } from "@/domain/plans";
+import { PLATFORM_FEE_BPS } from "@/domain/payout";
 import { getCurrentUser } from "@/server/auth";
 import { sellerAnalytics } from "@/server/analytics";
 import { entitlementsForUser } from "@/server/billing";
+import { sellerPayoutStatus } from "@/server/payouts";
+import { ConnectPayoutsButton } from "@/components/ConnectPayoutsButton";
 import { EmptyState } from "@/components/EmptyState";
 import { NewProductForm } from "@/components/NewProductForm";
 import { UpgradeButton } from "@/components/UpgradeButton";
@@ -20,9 +23,10 @@ export default async function SellPage({ params }: { params: Promise<{ locale: s
   if (!user) redirect(`/${locale}/login`);
   if (user.role === "BUYER") redirect(`/${locale}/account`);
   const t = await getTranslations("sell");
-  const [products, ent] = await Promise.all([
+  const [products, ent, payouts] = await Promise.all([
     db.product.findMany({ where: { sellerId: user.id }, orderBy: { createdAt: "desc" } }),
     entitlementsForUser(user.id),
+    sellerPayoutStatus(user.id),
   ]);
   // The gate decides before the query runs: a Free seller is never counted for.
   const stats = analyticsAccess(user.role, ent).allowed ? await sellerAnalytics(user.id) : null;
@@ -66,6 +70,28 @@ export default async function SellPage({ params }: { params: Promise<{ locale: s
             </>
           )}
         </>
+      )}
+      <h2>{t("payouts")}</h2>
+      <p className="muted">{t("payoutsHint", { fee: `${PLATFORM_FEE_BPS / 100}%` })}</p>
+      {payouts.readiness.ready ? (
+        <p className="muted">{t("payoutsReady")}</p>
+      ) : (
+        <div className="row">
+          <span className="muted">{t(`payoutState.${payouts.readiness.reason}` as "payoutState.no_account")}</span>
+          <ConnectPayoutsButton locale={locale} label={t(payouts.readiness.reason === "no_account" ? "payoutsConnect" : "payoutsFinish")} />
+        </div>
+      )}
+      {payouts.totals.length > 0 && (
+        <table><thead><tr><th>Currency</th><th>Owed</th><th>Paid</th><th>Reversed</th></tr></thead><tbody>
+          {payouts.totals.map((line) => (
+            <tr key={line.currency}>
+              <td>{line.currency.toUpperCase()}</td>
+              <td>{money(line.pendingMinor, line.currency, locale) ?? "—"}</td>
+              <td>{money(line.paidMinor, line.currency, locale) ?? "—"}</td>
+              <td>{money(line.reversedMinor, line.currency, locale) ?? "—"}</td>
+            </tr>
+          ))}
+        </tbody></table>
       )}
       <h2>{t("new")}</h2>
       <NewProductForm />

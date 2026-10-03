@@ -12,9 +12,17 @@ import { PostgresStore } from "durable-workflow/postgres";
 import { db } from "@/lib/db";
 import { pool } from "@/lib/pg";
 import { billingProvider } from "./provider";
+import { cancelPayout, markPayoutReversed, markPayoutSent, parkedPayoutRuns, payoutForOrder, payoutToSend, recordOwedPayout } from "./payouts";
 
 export const REVIEW_TIMEOUT_MS = 7 * 24 * 3600_000;
 export const REFUND_DECISION_TIMEOUT_MS = 3 * 24 * 3600_000;
+
+/** What the webhook sends a parked payout when its seller finishes onboarding. */
+export const PAYOUT_READY_SIGNAL = "account-ready";
+
+/** One payout run and one reversal run per order: derived ids, so neither can be started twice. */
+export const payoutRunId = (orderId: string) => `payout:${orderId}`;
+export const payoutReversalRunId = (orderId: string) => `payout-reversal:${orderId}`;
 
 export interface ReviewDecision {
   approved: boolean;
@@ -84,6 +92,102 @@ export const refundRequest = defineWorkflow<{ orderId: string }, "refunded" | "d
   },
 );
 
+/**
+ * The seller's share of one sale. Every move of their money is a step: owing it,
+ * sending it, writing down that it went — so a crash between any two of them
+ * resumes instead of leaving the transfer in doubt.
+ */
+export const sellerPayout = defineWorkflow<{ orderId: string }, "paid" | "canceled">(
+  "seller-payout",
+  async (ctx, { orderId }) => {
+    const owed = await ctx.step("record-owed", () => recordOwedPayout(orderId, ctx.runId));
+
+    // No timeout on this wait: what a seller has earned does not expire, so an
+    // account that was never finished parks the run rather than ending it. The
+    // account.updated webhook signals it (server/billing.ts) — otherwise the
+    // money would sit until someone noticed.
+    if (!owed.ready) await ctx.waitFor(PAYOUT_READY_SIGNAL);
+
+    const payoutRef = await ctx.step(
+      "transfer",
+      async () => {
+        const sendable = await payoutToSend(owed.payoutId);
+        if (!sendable) return null; // refunded while we waited; nothing to send
+        const { payoutRef } = await billingProvider().sendPayout({ ...sendable, amountMinor: sendable.netMinor, ref: owed.payoutId });
+        return payoutRef;
+      },
+      { retry: { maxAttempts: 5, initialDelayMs: 60_000 } },
+    );
+    if (payoutRef === null) return "canceled";
+
+    await ctx.step("mark-sent", () => markPayoutSent(owed.payoutId, payoutRef));
+    return "paid";
+  },
+);
+
+/**
+ * The other direction: the buyer got their money back, so the seller's share
+ * comes back too. A separate run from the payout's because a refund can arrive
+ * at any time — including while that one is still waiting for onboarding, when
+ * there is nothing to reverse and the payout is cancelled instead.
+ */
+export const payoutReversal = defineWorkflow<{ orderId: string }, "reversed" | "canceled" | "nothing">(
+  "payout-reversal",
+  async (ctx, { orderId }) => {
+    const payout = await ctx.step("find-payout", () => payoutForOrder(orderId));
+    if (!payout) return "nothing"; // an order paid before payouts existed
+
+    if (payout.status !== "PAID") {
+      await ctx.step("cancel", async () => {
+        // Stop the run still waiting on this seller: once the sale is refunded
+        // their finishing onboarding must not pay it out.
+        if (payout.runId) await engine().cancel(payout.runId);
+        return cancelPayout(payout.id);
+      });
+      return "canceled";
+    }
+
+    const providerRef = payout.providerRef;
+    if (!providerRef) throw new Error(`payout ${payout.id} is PAID with no transfer to reverse`);
+    await ctx.step(
+      "reverse",
+      async () => {
+        await billingProvider().reversePayout(providerRef);
+        return providerRef;
+      },
+      { retry: { maxAttempts: 5, initialDelayMs: 60_000 } },
+    );
+    await ctx.step("mark-reversed", () => markPayoutReversed(payout.id));
+    return "reversed";
+  },
+);
+
+/** Both runs get their first pass now, the way the review and refund routes give theirs one. */
+export async function startSellerPayout(orderId: string): Promise<string> {
+  const runId = await engine().start(sellerPayout, { orderId }, { id: payoutRunId(orderId) });
+  await engine().tick(runId);
+  return runId;
+}
+
+export async function startPayoutReversal(orderId: string): Promise<string> {
+  const runId = await engine().start(payoutReversal, { orderId }, { id: payoutReversalRunId(orderId) });
+  await engine().tick(runId);
+  return runId;
+}
+
+/** Wake every payout parked on this seller's onboarding. */
+export async function resumeParkedPayouts(sellerId: string): Promise<void> {
+  for (const runId of await parkedPayoutRuns(sellerId)) {
+    try {
+      await engine().signal(runId, PAYOUT_READY_SIGNAL, {});
+    } catch {
+      // The run may have finished or been cancelled since the row was written.
+      // The payout row is the record of what is owed; a signal with nowhere to
+      // land is not news.
+    }
+  }
+}
+
 const globalForEngine = globalThis as unknown as { workflowEngine?: Engine; workflowStore?: PostgresStore };
 
 export function workflowStore(): PostgresStore {
@@ -93,6 +197,6 @@ export function workflowStore(): PostgresStore {
 export function engine(): Engine {
   return (globalForEngine.workflowEngine ??= new Engine({
     store: workflowStore(),
-    workflows: [productReview, refundRequest],
+    workflows: [productReview, refundRequest, sellerPayout, payoutReversal],
   }));
 }

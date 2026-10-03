@@ -10,7 +10,9 @@ import type { BillingEvent } from "@/domain/billing-event";
 import { orderPredecessorsOf, orderStatusForEvent } from "@/domain/order";
 import { subscriptionPredecessorsOf, subscriptionStatusForEvent } from "@/domain/subscription";
 import { entitlementsFor, type Entitlements } from "@/domain/plans";
+import { syncPayoutAccount } from "./payouts";
 import { billingProvider } from "./provider";
+import { resumeParkedPayouts, startPayoutReversal, startSellerPayout } from "./workflows";
 
 export type ApplyOutcome = "duplicate" | "ignored" | "not_found" | "transitioned" | "renewed" | "no_transition";
 
@@ -65,6 +67,16 @@ export async function applyEvent(providerName: string, event: BillingEvent): Pro
     throw err;
   }
 
+  // A seller's account changing standing is not a purchase; it decides whether
+  // the money a purchase owes them can move.
+  if (event.type === "payout_account_updated") {
+    if (!event.providerRef) return "not_found";
+    const account = await syncPayoutAccount(event.providerRef, event.payoutsEnabled === true);
+    if (!account) return "not_found";
+    if (event.payoutsEnabled) await resumeParkedPayouts(account.sellerId);
+    return "transitioned";
+  }
+
   const refs = [
     event.providerRef ? { providerRef: event.providerRef } : null,
     event.checkoutRef ? { checkoutRef: event.checkoutRef } : null,
@@ -79,7 +91,14 @@ export async function applyEvent(providerName: string, event: BillingEvent): Pro
       where: { id: order.id, status: { in: orderPredecessorsOf(orderTarget) } },
       data: { status: orderTarget, ...(event.providerRef ? { providerRef: event.providerRef } : {}) },
     });
-    return count === 1 ? "transitioned" : "no_transition";
+    if (count !== 1) return "no_transition";
+    // Money that arrived is money the seller is owed; money given back is money
+    // owed back. Both are durable runs, started here because this is the one
+    // place an order's status changes — and started only on the transition, so
+    // a replayed delivery cannot start either of them twice.
+    if (orderTarget === "PAID") await startSellerPayout(order.id);
+    if (orderTarget === "REFUNDED") await startPayoutReversal(order.id);
+    return "transitioned";
   }
 
   const subTarget = subscriptionStatusForEvent(event.type);

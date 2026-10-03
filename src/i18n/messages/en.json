@@ -39,6 +39,12 @@
     "analyticsPro": "Views, purchases and questions per product come with Pro.",
     "upgrade": "Upgrade to Pro — {price}/month",
     "total": "All products",
+    "payouts": "Payouts",
+    "payoutsHint": "Your share of every sale goes to your own account; the platform keeps {fee} of the price. A refunded sale is taken back out.",
+    "payoutsReady": "Your account is ready — each sale is transferred as soon as the payment lands.",
+    "payoutsConnect": "Set up payouts",
+    "payoutsFinish": "Finish setting up payouts",
+    "payoutState": { "no_account": "Sales are being held until you have an account to pay them into.", "onboarding_incomplete": "Stripe still needs a few details before it can pay you; what you have earned is waiting." },
     "status": { "DRAFT": "Draft", "PENDING_REVIEW": "In review", "PUBLISHED": "Published", "REJECTED": "Rejected" }
   },
   "admin": {

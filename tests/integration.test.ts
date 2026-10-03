@@ -14,7 +14,8 @@ import { FakeBillingProvider } from "@/providers/fake";
 import { setBillingProviderForTests } from "@/server/provider";
 import { applyEvent, entitlementsForUser, startOrderCheckout } from "@/server/billing";
 import { recordProductView, sellerAnalytics } from "@/server/analytics";
-import { engine, productReview, refundRequest, workflowStore } from "@/server/workflows";
+import { engine, payoutRunId, productReview, refundRequest, workflowStore } from "@/server/workflows";
+import { sellerPayoutStatus, startPayoutOnboarding } from "@/server/payouts";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
 import { currentPeriod } from "@/server/usage";
 import { issueSession } from "@/server/auth";
@@ -79,6 +80,49 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
 
     expect(await applyEvent("fake", { providerEventId: "e2", type: "order_refunded", providerRef: "pi_9" })).toBe("transitioned");
     expect((await db.order.findUniqueOrThrow({ where: { id: orderId } })).status).toBe("REFUNDED");
+  });
+
+  it("payout: parked until the seller can be paid, then the sale minus the fee, and a refund takes it back", async () => {
+    const { orderId } = await startOrderCheckout(buyerId, productId);
+    expect(await applyEvent("fake", { providerEventId: "y1", type: "order_paid", checkoutRef: `cs_fake_${orderId}`, providerRef: "pi_y" })).toBe("transitioned");
+
+    // Owed the moment the money lands. Nothing moves: there is nowhere to send it.
+    const payout = await db.payout.findUniqueOrThrow({ where: { orderId } });
+    expect(payout).toMatchObject({ status: "PENDING", amountMinor: 1900, feeMinor: 190, netMinor: 1710 });
+    expect((await workflowStore().get(payoutRunId(orderId)))?.status).toBe("waiting");
+    expect(billing.payouts.map((p) => p.ref)).not.toContain(payout.id);
+
+    expect(await startPayoutOnboarding({ id: sellerId, email: "s@t.test" }, "en")).toContain(`acct_fake_${sellerId}`);
+
+    // Onboarding finished: the webhook wakes the parked run, which sends the
+    // seller's share and not a unit more.
+    expect(await applyEvent("fake", { providerEventId: "y2", type: "payout_account_updated", providerRef: `acct_fake_${sellerId}`, payoutsEnabled: true })).toBe("transitioned");
+    expect(billing.payouts).toContainEqual({ ref: payout.id, accountRef: `acct_fake_${sellerId}`, amountMinor: 1710, currency: "usd" });
+    expect(await db.payout.findUniqueOrThrow({ where: { orderId } })).toMatchObject({ status: "PAID", providerRef: `tr_fake_${payout.id}` });
+    expect(await sellerPayoutStatus(sellerId)).toMatchObject({
+      readiness: { ready: true },
+      totals: [{ currency: "usd", pendingMinor: 0, paidMinor: 1710, reversedMinor: 0 }],
+    });
+
+    // The refund comes back through the same webhook path as the order's own status.
+    expect(await applyEvent("fake", { providerEventId: "y3", type: "order_refunded", providerRef: "pi_y" })).toBe("transitioned");
+    expect(billing.reversals).toContain(`tr_fake_${payout.id}`);
+    expect((await db.payout.findUniqueOrThrow({ where: { orderId } })).status).toBe("REVERSED");
+  });
+
+  it("payout: a refund before the seller onboards cancels it, so finishing later pays nothing", async () => {
+    const { orderId } = await startOrderCheckout(buyerId, productId);
+    await applyEvent("fake", { providerEventId: "z1", type: "order_paid", checkoutRef: `cs_fake_${orderId}`, providerRef: "pi_z" });
+    const payout = await db.payout.findUniqueOrThrow({ where: { orderId } });
+
+    await applyEvent("fake", { providerEventId: "z2", type: "order_refunded", providerRef: "pi_z" });
+    expect((await db.payout.findUniqueOrThrow({ where: { orderId } })).status).toBe("CANCELED");
+    expect((await workflowStore().get(payoutRunId(orderId)))?.status).toBe("canceled");
+
+    await startPayoutOnboarding({ id: sellerId, email: "s@t.test" }, "en");
+    await applyEvent("fake", { providerEventId: "z3", type: "payout_account_updated", providerRef: `acct_fake_${sellerId}`, payoutsEnabled: true });
+    expect(billing.payouts.map((p) => p.ref)).not.toContain(payout.id);
+    expect(billing.reversals).not.toContain(`tr_fake_${payout.id}`);
   });
 
   it("review: submit → PENDING_REVIEW → approve → PUBLISHED", async () => {

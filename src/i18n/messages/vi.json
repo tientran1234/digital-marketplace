@@ -39,6 +39,12 @@
     "analyticsPro": "Lượt xem, lượt mua và số câu hỏi theo từng sản phẩm có trong gói Pro.",
     "upgrade": "Nâng cấp Pro — {price}/tháng",
     "total": "Tất cả sản phẩm",
+    "payouts": "Nhận tiền",
+    "payoutsHint": "Phần của bạn trong mỗi đơn sẽ về tài khoản của bạn; nền tảng giữ {fee} giá bán. Đơn bị hoàn tiền thì phần đó bị thu lại.",
+    "payoutsReady": "Tài khoản đã sẵn sàng — mỗi đơn được chuyển ngay khi tiền về.",
+    "payoutsConnect": "Thiết lập nhận tiền",
+    "payoutsFinish": "Hoàn tất thiết lập nhận tiền",
+    "payoutState": { "no_account": "Tiền bán hàng đang được giữ lại vì chưa có tài khoản để chuyển vào.", "onboarding_incomplete": "Stripe còn cần thêm vài thông tin trước khi chuyển tiền cho bạn; phần bạn đã kiếm được vẫn đang chờ." },
     "status": { "DRAFT": "Nháp", "PENDING_REVIEW": "Đang duyệt", "PUBLISHED": "Đã đăng", "REJECTED": "Bị từ chối" }
   },
   "admin": {
