@@ -10,6 +10,7 @@ export type BillingEventType =
   | "subscription_activated"
   | "subscription_payment_failed"
   | "subscription_canceled"
+  | "payout_account_updated"
   | "unknown";
 
 export interface BillingEvent {
@@ -20,6 +21,8 @@ export interface BillingEvent {
   /** Provider's checkout session id. */
   checkoutRef?: string;
   currentPeriodEnd?: Date;
+  /** Whether a seller's connected account may receive money, on payout_account_updated. */
+  payoutsEnabled?: boolean;
 }
 
 export type CreateCheckoutInput =
@@ -44,6 +47,27 @@ export type CreateCheckoutInput =
       cancelUrl: string;
     };
 
+export interface CreatePayoutAccountInput {
+  /** Our seller id, kept on the provider's account so a stray one leads back here. */
+  sellerId: string;
+  email: string;
+}
+
+export interface PayoutOnboardingInput {
+  accountRef: string;
+  /** Where the provider sends a seller whose link went stale before they finished. */
+  refreshUrl: string;
+  returnUrl: string;
+}
+
+export interface SendPayoutInput {
+  accountRef: string;
+  amountMinor: number;
+  currency: string;
+  /** Our payout id. The provider's idempotency key, so a retried step cannot pay twice. */
+  ref: string;
+}
+
 export interface CreateCheckoutResult {
   checkoutUrl: string;
   checkoutRef: string;
@@ -56,6 +80,14 @@ export interface IBillingProvider {
   verifyWebhook(rawBody: string, signature: string): Promise<BillingEvent>;
   /** Refund a paid order by its providerRef. The status change arrives later, via webhook. */
   refund(providerRef: string): Promise<void>;
+  /** Create the seller's connected account. Onboarding itself happens on the provider's screens. */
+  createPayoutAccount(input: CreatePayoutAccountInput): Promise<{ accountRef: string }>;
+  /** A fresh link into those screens. Single-use and short-lived, so it is minted per click. */
+  payoutOnboardingUrl(input: PayoutOnboardingInput): Promise<string>;
+  /** Move a seller's share to their account. Idempotent on `input.ref` — the workflow retries it. */
+  sendPayout(input: SendPayoutInput): Promise<{ payoutRef: string }>;
+  /** Take that transfer back, because the buyer was refunded. */
+  reversePayout(payoutRef: string): Promise<void>;
 }
 
 export class WebhookVerificationError extends Error {

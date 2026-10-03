@@ -4,7 +4,7 @@
  * the extractive stand-in answers only out of what retrieval handed it.
  */
 import { describe, expect, it } from "vitest";
-import { QUOTED, extractiveBaseline, fakesRequested } from "@/providers/fake";
+import { FakeBillingProvider, QUOTED, extractiveBaseline, fakesRequested } from "@/providers/fake";
 import type { ChatMessage, ModelRequest, ToolUsePart } from "agent-runtime";
 
 const request = (messages: ChatMessage[] = []): ModelRequest => ({ messages });
@@ -63,5 +63,16 @@ describe("extractive baseline", () => {
     const provider = extractiveBaseline("q");
     await provider.complete(request());
     expect(textOf((await provider.complete(request([toolResult("")]))).content)).toBe("");
+  });
+});
+
+describe("the billing double's payouts", () => {
+  /** The workflow retries the transfer step; the real provider deduplicates on the idempotency key, so this one must too. */
+  it("sends a payout once per payout id, however many times the step runs", async () => {
+    const billing = new FakeBillingProvider();
+    const input = { accountRef: "acct_fake_s1", amountMinor: 1710, currency: "usd", ref: "payout_1" };
+    expect(await billing.sendPayout(input)).toEqual({ payoutRef: "tr_fake_payout_1" });
+    expect(await billing.sendPayout(input)).toEqual({ payoutRef: "tr_fake_payout_1" });
+    expect(billing.payouts).toEqual([input]);
   });
 });

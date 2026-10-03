@@ -23,6 +23,8 @@ model User {
   sessions      Session[]
   products      Product[]
   orders        Order[]
+  payoutAccount PayoutAccount?
+  payouts       Payout[]
   subscriptions Subscription[]
   usage         UsageCounter[]
   traces        AgentTrace[]
@@ -121,11 +123,51 @@ model Order {
   provider    String   @default("stripe")
   providerRef String?  @unique
   checkoutRef String?  @unique
+  payout      Payout?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([buyerId, status])
   @@index([productId, status])
+}
+
+/// A seller's connected account at the provider. One per seller; the provider
+/// owns the onboarding screens and the bank details, so all that is here is the
+/// reference and whether that account may receive money yet.
+model PayoutAccount {
+  id             String   @id @default(cuid())
+  sellerId       String   @unique
+  seller         User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  provider       String   @default("stripe")
+  accountRef     String   @unique
+  payoutsEnabled Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+/// A seller's share of one paid order: the gross, our fee, and what we owe.
+/// One row per order — the unique orderId is what stops a replayed step owing
+/// the same sale twice. Status moves forward only (src/domain/payout.ts).
+model Payout {
+  id          String   @id @default(cuid())
+  orderId     String   @unique
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sellerId    String
+  seller      User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  amountMinor Int
+  feeMinor    Int
+  netMinor    Int
+  currency    String
+  status      String
+  provider    String   @default("stripe")
+  /// The provider's transfer, once there is one.
+  providerRef String?  @unique
+  /// The durable-workflow run that owns this payout's money movements.
+  runId       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sellerId, status])
 }
 
 /// A membership plan. Status moves forward only (src/domain/subscription.ts).

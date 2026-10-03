@@ -5,7 +5,10 @@ import {
   type BillingEvent,
   type CreateCheckoutInput,
   type CreateCheckoutResult,
+  type CreatePayoutAccountInput,
   type IBillingProvider,
+  type PayoutOnboardingInput,
+  type SendPayoutInput,
 } from "@/domain/billing-event";
 
 interface SessionLike {
@@ -22,6 +25,10 @@ interface InvoiceLike {
 interface ChargeLike {
   id: string;
   payment_intent?: string | { id: string } | null;
+}
+interface AccountLike {
+  id: string;
+  payouts_enabled?: boolean;
 }
 
 const refOf = (v: unknown): string | undefined =>
@@ -72,6 +79,46 @@ export class StripeProvider implements IBillingProvider {
   async refund(providerRef: string): Promise<void> {
     await this.stripe.refunds.create({ payment_intent: providerRef });
   }
+
+  async createPayoutAccount({ sellerId, email }: CreatePayoutAccountInput): Promise<{ accountRef: string }> {
+    const account = await this.stripe.accounts.create({
+      type: "express",
+      email,
+      // Transfers are all we ask for: the buyer pays us, so this account never
+      // takes a card of its own.
+      capabilities: { transfers: { requested: true } },
+      metadata: { sellerId },
+    });
+    return { accountRef: account.id };
+  }
+
+  async payoutOnboardingUrl({ accountRef, refreshUrl, returnUrl }: PayoutOnboardingInput): Promise<string> {
+    const link = await this.stripe.accountLinks.create({
+      account: accountRef,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type: "account_onboarding",
+    });
+    return link.url;
+  }
+
+  /**
+   * A transfer off the platform balance rather than a destination charge: the
+   * fee is ours to compute (domain/payout.ts) and the money has already
+   * arrived, so all that is left is moving the seller's share. Our payout id is
+   * the idempotency key, which is what makes the workflow's retry safe.
+   */
+  async sendPayout({ accountRef, amountMinor, currency, ref }: SendPayoutInput): Promise<{ payoutRef: string }> {
+    const transfer = await this.stripe.transfers.create(
+      { destination: accountRef, amount: amountMinor, currency, metadata: { payoutId: ref } },
+      { idempotencyKey: `payout:${ref}` },
+    );
+    return { payoutRef: transfer.id };
+  }
+
+  async reversePayout(payoutRef: string): Promise<void> {
+    await this.stripe.transfers.createReversal(payoutRef, {}, { idempotencyKey: `payout-reversal:${payoutRef}` });
+  }
 }
 
 const secondsToDate = (s: unknown) => (typeof s === "number" ? new Date(s * 1000) : undefined);
@@ -106,6 +153,11 @@ export function normalize(event: Stripe.Event): BillingEvent {
     case "customer.subscription.deleted": {
       const s = object as { id: string };
       return { ...base, type: "subscription_canceled", providerRef: s.id };
+    }
+    case "account.updated": {
+      // Connect's own event, for the seller's account rather than a purchase.
+      const a = object as AccountLike;
+      return { ...base, type: "payout_account_updated", providerRef: a.id, payoutsEnabled: a.payouts_enabled === true };
     }
     case "charge.refunded": {
       const c = object as ChargeLike;

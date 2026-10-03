@@ -22,4 +22,10 @@ describe("stripe → neutral events", () => {
     expect(normalize(ev("charge.refunded", { id: "ch_1", payment_intent: "pi_1" }))).toMatchObject({ type: "order_refunded", providerRef: "pi_1" });
     expect(normalize(ev("customer.created", {})).type).toBe("unknown");
   });
+  it("reads a connected account's standing, and treats anything but a yes as not ready", () => {
+    expect(normalize(ev("account.updated", { id: "acct_1", payouts_enabled: true })))
+      .toMatchObject({ type: "payout_account_updated", providerRef: "acct_1", payoutsEnabled: true });
+    expect(normalize(ev("account.updated", { id: "acct_1" })).payoutsEnabled).toBe(false);
+    expect(normalize(ev("account.updated", { id: "acct_1", payouts_enabled: false })).payoutsEnabled).toBe(false);
+  });
 });

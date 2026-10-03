@@ -5,13 +5,18 @@ import {
   type BillingEvent,
   type CreateCheckoutInput,
   type CreateCheckoutResult,
+  type CreatePayoutAccountInput,
   type IBillingProvider,
+  type PayoutOnboardingInput,
+  type SendPayoutInput,
 } from "@/domain/billing-event";
 
 /** In-memory provider: the whole purchase flow runs in tests with no Stripe. */
 export class FakeBillingProvider implements IBillingProvider {
   readonly name = "fake";
   readonly refunds: string[] = [];
+  readonly payouts: Array<{ ref: string; accountRef: string; amountMinor: number; currency: string }> = [];
+  readonly reversals: string[] = [];
   constructor(private readonly secret = "fake") {}
 
   async createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult> {
@@ -28,6 +33,21 @@ export class FakeBillingProvider implements IBillingProvider {
   }
   async refund(providerRef: string) {
     this.refunds.push(providerRef);
+  }
+
+  async createPayoutAccount({ sellerId }: CreatePayoutAccountInput) {
+    return { accountRef: `acct_fake_${sellerId}` };
+  }
+  async payoutOnboardingUrl({ accountRef, returnUrl }: PayoutOnboardingInput) {
+    return `https://fake.connect/${accountRef}?return=${encodeURIComponent(returnUrl)}`;
+  }
+  /** Idempotent on `ref`, the way the real one is on its idempotency key: a retried transfer is the same transfer. */
+  async sendPayout({ accountRef, amountMinor, currency, ref }: SendPayoutInput) {
+    if (!this.payouts.some((p) => p.ref === ref)) this.payouts.push({ ref, accountRef, amountMinor, currency });
+    return { payoutRef: `tr_fake_${ref}` };
+  }
+  async reversePayout(payoutRef: string) {
+    this.reversals.push(payoutRef);
   }
 }
 

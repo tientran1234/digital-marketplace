@@ -4,6 +4,15 @@ import { canTransitionSubscription, subscriptionStatusForEvent } from "@/domain/
 import { canUse, entitlementsFor } from "@/domain/plans";
 import { downloadAccess } from "@/domain/access";
 import { PURCHASE_STATUSES, analyticsAccess, countsAsPurchase, countsAsView, totals } from "@/domain/analytics";
+import {
+  PAYOUT_STATUSES,
+  PLATFORM_FEE_BPS,
+  canTransitionPayout,
+  payoutPredecessorsOf,
+  payoutReadiness,
+  payoutTotals,
+  splitPayment,
+} from "@/domain/payout";
 
 describe("order state machine", () => {
   it("is forward-only", () => {
@@ -91,5 +100,64 @@ describe("seller analytics", () => {
         { productId: "p2", slug: "b", title: "B", views: 3, purchases: 0, questions: 1 },
       ]),
     ).toEqual({ views: 15, purchases: 2, questions: 6 });
+  });
+});
+
+describe("payout split", () => {
+  it("keeps the platform's cut and leaves the rest", () => {
+    expect(splitPayment(1900)).toEqual({ grossMinor: 1900, feeMinor: 190, netMinor: 1710 });
+    expect(PLATFORM_FEE_BPS).toBe(1_000);
+  });
+
+  /** The invariant the transfer depends on: we can never send out more than came in. */
+  it("adds back up to the gross at every amount, with the rounding in the seller's favour", () => {
+    for (const gross of [0, 1, 7, 99, 101, 999, 1900, 123_457]) {
+      const { feeMinor, netMinor } = splitPayment(gross);
+      expect(feeMinor + netMinor).toBe(gross);
+      expect(feeMinor).toBe(Math.floor((gross * PLATFORM_FEE_BPS) / 10_000));
+      expect(netMinor).toBeGreaterThanOrEqual(feeMinor === 0 ? gross : 0);
+    }
+  });
+});
+
+describe("payout state machine", () => {
+  it("is forward-only, and a refund either cancels or reverses depending on what moved", () => {
+    expect(canTransitionPayout("PENDING", "PAID")).toBe(true);
+    expect(canTransitionPayout("PENDING", "CANCELED")).toBe(true);
+    expect(canTransitionPayout("PAID", "REVERSED")).toBe(true);
+    // Nothing left the platform for a cancelled payout, so there is nothing to reverse.
+    expect(canTransitionPayout("CANCELED", "REVERSED")).toBe(false);
+    expect(canTransitionPayout("PAID", "CANCELED")).toBe(false);
+    for (const to of PAYOUT_STATUSES) {
+      expect(canTransitionPayout("REVERSED", to)).toBe(false);
+      expect(canTransitionPayout("CANCELED", to)).toBe(false);
+    }
+  });
+  it("cannot pay the same payout twice, or reverse one that was never sent", () => {
+    expect(payoutPredecessorsOf("PAID")).toEqual(["PENDING"]);
+    expect(payoutPredecessorsOf("REVERSED")).toEqual(["PAID"]);
+    expect(payoutPredecessorsOf("CANCELED")).toEqual(["PENDING"]);
+  });
+});
+
+describe("payout readiness", () => {
+  it("needs an account that finished onboarding", () => {
+    expect(payoutReadiness(null)).toMatchObject({ ready: false, reason: "no_account" });
+    expect(payoutReadiness({ payoutsEnabled: false })).toMatchObject({ ready: false, reason: "onboarding_incomplete" });
+    expect(payoutReadiness({ payoutsEnabled: true })).toMatchObject({ ready: true });
+  });
+});
+
+describe("payout totals", () => {
+  const row = (status: string, netMinor: number, currency = "usd") => ({ status, netMinor, currency });
+  it("adds each currency up on its own and counts a cancelled payout nowhere", () => {
+    expect(payoutTotals([row("PENDING", 900), row("PAID", 1710), row("PAID", 90), row("REVERSED", 450), row("CANCELED", 9_999)])).toEqual([
+      { currency: "usd", pendingMinor: 900, paidMinor: 1800, reversedMinor: 450 },
+    ]);
+    expect(payoutTotals([row("PAID", 100), row("PAID", 200, "vnd")])).toEqual([
+      { currency: "usd", pendingMinor: 0, paidMinor: 100, reversedMinor: 0 },
+      { currency: "vnd", pendingMinor: 0, paidMinor: 200, reversedMinor: 0 },
+    ]);
+    expect(payoutTotals([])).toEqual([]);
   });
 });
