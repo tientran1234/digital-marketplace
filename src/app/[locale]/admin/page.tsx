@@ -5,8 +5,10 @@ import { db } from "@/lib/db";
 import { pool } from "@/lib/pg";
 import { getCurrentUser } from "@/server/auth";
 import { edition } from "@/server/license";
+import { pendingReviews } from "@/server/reviews";
 import { EmptyState } from "@/components/EmptyState";
-import { ReviewActions, RefundDecision } from "@/components/AdminActions";
+import { Rating } from "@/components/Rating";
+import { ReviewActions, RefundDecision, ReviewModeration } from "@/components/AdminActions";
 
 async function pendingRefunds() {
   const { rows } = await pool().query<{ id: string; data: { input: { orderId: string }; createdAt: number } }>(
@@ -20,10 +22,11 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
   const user = await getCurrentUser();
   if (!user) redirect(`/${locale}/login`);
   if (user.role !== "ADMIN") redirect(`/${locale}`);
-  const t = await getTranslations("admin");
-  const [pending, refunds, traces] = await Promise.all([
+  const [t, tReviews] = await Promise.all([getTranslations("admin"), getTranslations("reviews")]);
+  const [pending, refunds, ratings, traces] = await Promise.all([
     db.product.findMany({ where: { status: "PENDING_REVIEW" }, include: { seller: { select: { name: true } } } }),
     pendingRefunds(),
+    pendingReviews(),
     db.agentTrace.findMany({ orderBy: { createdAt: "desc" }, take: 20, include: { product: { select: { title: true } }, user: { select: { email: true } } } }),
   ]);
   const ed = edition();
@@ -44,6 +47,23 @@ export default async function AdminPage({ params }: { params: Promise<{ locale: 
       {refunds.length === 0 ? <EmptyState title={t("noRefunds")} hint={t("noRefundsHint")} /> : (
         <table><tbody>{refunds.map((r) => (
           <tr key={r.id}><td><code>{r.data.input.orderId}</code></td><td><RefundDecision runId={r.id} /></td></tr>
+        ))}</tbody></table>
+      )}
+
+      <h2>{t("moderation")}</h2>
+      {ratings.length === 0 ? <EmptyState title={t("noReviews")} hint={t("noReviewsHint")} /> : (
+        <table><tbody>{ratings.map((r) => (
+          <tr key={r.id}>
+            <td>
+              <Link href={`/${locale}/p/${r.product.slug}`}>{r.product.title}</Link>
+              <div className="muted">{r.buyer.name} · {r.createdAt.toISOString().slice(0, 10)}</div>
+            </td>
+            <td>
+              <Rating summary={{ count: 1, average: r.rating }} locale={locale} label={tReviews("rated", { average: r.rating, count: 1 })} showCount={false} />
+              <div>{r.body ?? <span className="muted">—</span>}</div>
+            </td>
+            <td><ReviewModeration reviewId={r.id} /></td>
+          </tr>
         ))}</tbody></table>
       )}
 

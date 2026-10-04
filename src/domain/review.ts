@@ -39,9 +39,10 @@ export interface ReviewContext {
   orders: readonly { id: string; status: string; reviewed: boolean }[];
 }
 
-export type ReviewEligibility =
-  | { allowed: true; orderId: string }
-  | { allowed: false; reason: "anonymous" | "not_purchased" | "already_reviewed" };
+/** Why there is no form to draw, in the words the page and the route both use. */
+export type ReviewRefusal = "anonymous" | "not_purchased" | "already_reviewed";
+
+export type ReviewEligibility = { allowed: true; orderId: string } | { allowed: false; reason: ReviewRefusal };
 
 /**
  * Which purchase this buyer may review, if any. One review per purchase rather

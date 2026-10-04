@@ -14,6 +14,23 @@
     "signInToAsk": "Sign in to ask.",
     "quota": "{used} of {limit} AI messages used this month"
   },
+  "reviews": {
+    "title": "Reviews",
+    "rated": "Rated {average} out of 5 by {count, plural, one {# buyer} other {# buyers}}",
+    "rating": "Your rating",
+    "scale": "{rating} out of {max}",
+    "body": "What should another buyer know? (optional)",
+    "bodyPlaceholder": "Worth the money because…",
+    "submit": "Post review",
+    "submitted": "Thanks — it appears once an admin has read it.",
+    "none": "No reviews yet.",
+    "noneHint": "Reviews from buyers appear here once an admin has read them.",
+    "refused": {
+      "anonymous": "Sign in to review a product you bought.",
+      "not_purchased": "Only buyers can review this one.",
+      "already_reviewed": "You have already reviewed this purchase."
+    }
+  },
   "account": {
     "title": "Account",
     "plan": "Plan",
@@ -53,12 +70,16 @@
     "approve": "Approve",
     "reject": "Reject",
     "refunds": "Refund requests",
+    "moderation": "Reviews to moderate",
+    "publish": "Publish",
     "traces": "AI runs",
     "edition": "Edition",
     "noPending": "Nothing waiting.",
     "noPendingHint": "Products land here when a seller submits them for review.",
     "noRefunds": "No refunds to decide.",
     "noRefundsHint": "A buyer's request waits here for three days before it is denied automatically.",
+    "noReviews": "No reviews to read.",
+    "noReviewsHint": "A buyer's rating waits here until you publish it; nothing reaches the listing before that.",
     "noTraces": "No AI runs yet.",
     "noTracesHint": "Every answer the assistant streams is recorded here with its tokens and cost."
   },

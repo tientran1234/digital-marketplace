@@ -14,6 +14,23 @@
     "signInToAsk": "Đăng nhập để hỏi.",
     "quota": "Đã dùng {used}/{limit} tin nhắn AI tháng này"
   },
+  "reviews": {
+    "title": "Đánh giá",
+    "rated": "{average} trên 5, theo {count} người mua",
+    "rating": "Bạn cho mấy điểm",
+    "scale": "{rating} trên {max}",
+    "body": "Người mua sau nên biết điều gì? (không bắt buộc)",
+    "bodyPlaceholder": "Đáng tiền vì…",
+    "submit": "Gửi đánh giá",
+    "submitted": "Cảm ơn bạn — đánh giá sẽ hiện sau khi quản trị viên đọc qua.",
+    "none": "Chưa có đánh giá nào.",
+    "noneHint": "Đánh giá của người mua sẽ hiện ở đây sau khi quản trị viên đọc qua.",
+    "refused": {
+      "anonymous": "Đăng nhập để đánh giá sản phẩm bạn đã mua.",
+      "not_purchased": "Chỉ người đã mua mới đánh giá được sản phẩm này.",
+      "already_reviewed": "Bạn đã đánh giá lần mua này rồi."
+    }
+  },
   "account": {
     "title": "Tài khoản",
     "plan": "Gói",
@@ -53,12 +70,16 @@
     "approve": "Duyệt",
     "reject": "Từ chối",
     "refunds": "Yêu cầu hoàn tiền",
+    "moderation": "Đánh giá chờ kiểm duyệt",
+    "publish": "Cho hiện",
     "traces": "Lượt chạy AI",
     "edition": "Phiên bản",
     "noPending": "Không có gì chờ.",
     "noPendingHint": "Sản phẩm sẽ hiện ở đây khi người bán gửi duyệt.",
     "noRefunds": "Không có yêu cầu hoàn tiền.",
     "noRefundsHint": "Yêu cầu của người mua chờ ở đây ba ngày, sau đó tự động bị từ chối.",
+    "noReviews": "Không có đánh giá nào cần đọc.",
+    "noReviewsHint": "Đánh giá của người mua chờ ở đây tới khi bạn cho hiện; trước đó nó không xuất hiện trên trang sản phẩm.",
     "noTraces": "Chưa có lượt chạy AI nào.",
     "noTracesHint": "Mỗi câu trả lời của trợ lý đều được ghi lại ở đây kèm token và chi phí."
   },

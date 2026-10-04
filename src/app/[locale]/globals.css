@@ -36,10 +36,17 @@ h2 { font-size:var(--text-lg); margin:var(--space-6) 0 var(--space-3); }
 .card .body { padding:var(--space-4); display:flex; flex-direction:column; flex:1; }
 .card h3 { margin:0 0 var(--space-1); font-size:1rem; }
 .card p { margin:0; color:var(--muted); font-size:var(--text-md); }
-.price { font-weight:600; margin-top:auto; padding-top:var(--space-3); }
+.price { font-weight:600; margin-top:auto; padding-top:var(--space-3); display:flex; align-items:baseline; }
 /* Derived from the slug (src/lib/cover.ts) — a fixed ratio so a long title
    below it never makes one card taller than its neighbours' covers. */
 .cover { aspect-ratio:16/10; display:grid; place-items:center; color:#fff; font-size:1.6rem; font-weight:700; letter-spacing:.02em; text-shadow:0 1px 2px rgb(0 0 0 / 25%); }
+
+/* An average and its stars, on the card beside the price and under the title
+   on the product page. The glyphs carry the --warn hue rather than a colour of
+   their own, so dark mode already has them. */
+.rating { display:inline-flex; gap:var(--space-1); align-items:baseline; font-size:var(--text-sm); white-space:nowrap; }
+.rating .stars { color:var(--warn); letter-spacing:.5px; }
+.price .rating { margin-left:auto; padding-left:var(--space-2); }
 
 /* Empty states: say what is missing and what to do about it, never a bare
    line of grey text. */

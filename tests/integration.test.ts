@@ -16,6 +16,8 @@ import { applyEvent, entitlementsForUser, startOrderCheckout } from "@/server/bi
 import { recordProductView, sellerAnalytics } from "@/server/analytics";
 import { engine, payoutRunId, productReview, refundRequest, workflowStore } from "@/server/workflows";
 import { sellerPayoutStatus, startPayoutOnboarding } from "@/server/payouts";
+import { moderateReview, pendingReviews, productRating, publishedReviews, reviewEligibilityFor, submitReview } from "@/server/reviews";
+import { NO_RATINGS } from "@/domain/review";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
 import { currentPeriod } from "@/server/usage";
 import { issueSession } from "@/server/auth";
@@ -134,6 +136,58 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     const run = await engine().signal(runId, "review", { approved: true });
     expect(run.output).toBe("published");
     expect((await db.product.findUniqueOrThrow({ where: { id: draft.id } })).status).toBe("PUBLISHED");
+  });
+
+  it("reviews: a purchase earns one rating, and nothing is on the listing before an admin reads it", async () => {
+    const { orderId } = await startOrderCheckout(buyerId, productId);
+
+    // Nothing bought yet: no form to draw, and the route refuses an order id
+    // that was guessed rather than earned.
+    expect(await reviewEligibilityFor(productId, buyerId)).toMatchObject({ allowed: false, reason: "not_purchased" });
+    expect(await submitReview({ orderId, userId: buyerId, rating: 5 })).toMatchObject({ submitted: false, reason: "not_purchased" });
+
+    await applyEvent("fake", { providerEventId: "v1", type: "order_paid", checkoutRef: `cs_fake_${orderId}`, providerRef: "pi_v1" });
+    expect(await reviewEligibilityFor(productId, buyerId)).toEqual({ allowed: true, orderId });
+
+    const submitted = await submitReview({ orderId, userId: buyerId, rating: 4, body: "  Clear and short.  " });
+    expect(submitted).toMatchObject({ submitted: true });
+    if (!submitted.submitted) throw new Error("unreachable");
+
+    // Pending is invisible: no number on the card, no row on the page.
+    expect(await productRating(productId)).toEqual(NO_RATINGS);
+    expect(await publishedReviews(productId)).toEqual([]);
+    expect(await pendingReviews()).toHaveLength(1);
+
+    // One review per purchase, and not one the buyer never made.
+    expect(await submitReview({ orderId, userId: buyerId, rating: 1 })).toMatchObject({ submitted: false, reason: "already_reviewed" });
+    expect(await reviewEligibilityFor(productId, buyerId)).toMatchObject({ allowed: false, reason: "already_reviewed" });
+    const stranger = await db.user.create({ data: { email: "nosy@t.test", name: "Nosy", role: "BUYER" } });
+    expect(await submitReview({ orderId, userId: stranger.id, rating: 5 })).toMatchObject({ submitted: false, reason: "not_purchased" });
+
+    expect(await moderateReview(submitted.reviewId, true)).toBe(true);
+    // Decided once: the second click of two finds nothing to change.
+    expect(await moderateReview(submitted.reviewId, false)).toBe(false);
+    expect(await productRating(productId)).toEqual({ count: 1, average: 4 });
+    expect((await publishedReviews(productId))[0]).toMatchObject({ rating: 4, body: "Clear and short." });
+    expect(await pendingReviews()).toEqual([]);
+  });
+
+  it("reviews: a second sale earns a second rating, and a rejected one is in no average", async () => {
+    const said: string[] = [];
+    for (const [i, rating] of [5, 1].entries()) {
+      const { orderId } = await startOrderCheckout(buyerId, productId);
+      await applyEvent("fake", { providerEventId: `w${i}`, type: "order_paid", checkoutRef: `cs_fake_${orderId}`, providerRef: `pi_w${i}` });
+      const outcome = await submitReview({ orderId, userId: buyerId, rating });
+      if (!outcome.submitted) throw new Error(`rating ${rating} was refused: ${outcome.reason}`);
+      said.push(outcome.reviewId);
+    }
+    // Two sales, two things to say about them — the buyer is not limited to one.
+    expect(said).toHaveLength(2);
+
+    await moderateReview(said[0], true);
+    await moderateReview(said[1], false);
+    expect(await productRating(productId)).toEqual({ count: 1, average: 5 });
+    expect(await publishedReviews(productId)).toHaveLength(1);
   });
 
   it("indexes a document into pgvector and retrieves the relevant passage", async () => {

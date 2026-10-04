@@ -25,3 +25,15 @@ export function RefundDecision({ runId }: { runId: string }) {
   };
   return <span className="row"><button onClick={() => decide(true)}>{t("approve")}</button><button className="ghost" onClick={() => decide(false)}>{t("reject")}</button>{error && <span className="err">{error}</span>}</span>;
 }
+
+/** A buyer's rating: published or rejected, and either way it is decided. */
+export function ReviewModeration({ reviewId }: { reviewId: string }) {
+  const t = useTranslations("admin");
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const decide = async (approved: boolean) => {
+    try { await post("/api/admin/moderation", { reviewId, approved }); router.refresh(); }
+    catch (err) { setError((err as Error).message); }
+  };
+  return <span className="row"><button onClick={() => decide(true)}>{t("publish")}</button><button className="ghost" onClick={() => decide(false)}>{t("reject")}</button>{error && <span className="err">{error}</span>}</span>;
+}

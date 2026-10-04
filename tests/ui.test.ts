@@ -64,6 +64,18 @@ describe("product grid", () => {
   });
 });
 
+describe("ratings", () => {
+  /** The stars sit beside the price on a card, so the row has to make room. */
+  it("lays the card's price line out as a row with the rating at its end", () => {
+    expect(block(".price")).toMatch(/display: *flex/);
+    expect(block(".price .rating")).toMatch(/margin-left: *auto/);
+  });
+
+  it("colours the stars from a token, so dark mode already has them", () => {
+    expect(block(".rating .stars")).toMatch(/color: *var\(--warn\)/);
+  });
+});
+
 describe("loading skeletons", () => {
   it("shimmers", () => {
     expect(block(".skeleton")).toMatch(/animation: *skeleton/);
@@ -126,7 +138,7 @@ describe("copy", () => {
   it("has a title and a hint for every empty state", () => {
     const at = (messages: unknown, path: string) =>
       path.split(".").reduce<unknown>((node, key) => (node as Record<string, unknown>)?.[key], messages);
-    for (const key of ["home.empty", "home.emptyHint", "account.noOrders", "account.noOrdersHint", "sell.noProducts", "sell.noProductsHint", "admin.noPending", "admin.noPendingHint", "admin.noRefunds", "admin.noRefundsHint", "admin.noTraces", "admin.noTracesHint"]) {
+    for (const key of ["home.empty", "home.emptyHint", "account.noOrders", "account.noOrdersHint", "sell.noProducts", "sell.noProductsHint", "admin.noPending", "admin.noPendingHint", "admin.noRefunds", "admin.noRefundsHint", "admin.noReviews", "admin.noReviewsHint", "admin.noTraces", "admin.noTracesHint", "reviews.none", "reviews.noneHint"]) {
       expect(at(en, key), key).toBeTruthy();
     }
   });
