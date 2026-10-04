@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-04
+
+- Reviews and ratings: only buyers with a PAID order may review, one review per purchase, a moderation queue in admin, and the average rating on the product card — the row is keyed by the order rather than the buyer, so the unique constraint is what holds "one per purchase" and a second sale earns a second review; nothing a buyer writes reaches a listing until an admin publishes it, so the number on the card is what a human let through, and the decision is forward-only like an order's rather than a run parked on a signal, because a rating waits for nothing and moves no money.
+
 ## 2026-10-03
 
 - Seller payouts with Stripe Connect Express: an onboarding link from the sell page, a transfer per PAID order minus the platform fee, and payout status beside the seller's own numbers — every money movement inside a durable workflow, so a sale parks until the seller's account can receive it rather than being forgotten, a retried transfer pays once, and a refund reverses the transfer (or cancels a payout that never moved) through the same webhook path that changes the order.

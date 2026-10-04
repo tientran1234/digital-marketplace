@@ -3,15 +3,17 @@
 A marketplace for digital products where every listing comes with an
 assistant that has actually read it. Sellers upload a document, buyers purchase
 it once or subscribe, and questions get answered from the document itself —
-with citations. Reviews, refunds and seller payouts are durable workflows that
-wait — for a human, or for an onboarding to finish. English and Vietnamese.
+with citations. Buyers rate what they paid for, once per purchase, and a
+moderator decides what reaches the listing. Listing review, refunds and seller
+payouts are durable workflows that wait — for a human, or for an onboarding to
+finish. English and Vietnamese.
 
 Built on four libraries extracted from it:
 
 | Library | What it owns here |
 |---|---|
 | [agent-runtime](https://github.com/tientran1234/agent-runtime) | the "ask about this product" agent: tools, quota gate, streaming, tracing with cost |
-| [durable-workflow](https://github.com/tientran1234/durable-workflow) | product review (waits up to 7 days for an admin), refunds (waits for a decision, then calls the provider with retries) and seller payouts (wait for onboarding, transfer, reverse) |
+| [durable-workflow](https://github.com/tientran1234/durable-workflow) | listing review (waits up to 7 days for an admin), refunds (waits for a decision, then calls the provider with retries) and seller payouts (wait for onboarding, transfer, reverse) |
 | [subscription-billing](https://github.com/tientran1234/subscription-billing) | the billing design: idempotent webhooks, forward-only state machines, entitlements derived on read |
 | [offline-license](https://github.com/tientran1234/offline-license) | the self-hosted edition: admin area gated by a signed license, no phone-home |
 
@@ -55,7 +57,18 @@ has two tools — `search_docs` (retrieve + MMR over the product's chunks) and
 `product_facts` — a hard cap of six iterations, and a tracer that writes every
 run's spans, tokens and cost to `AgentTrace` for the admin page.
 
-**Review.** Submitting a product starts the `product-review` workflow: mark
+**Rate.** A purchase earns one review: the `Review` row is keyed by the order,
+so the unique constraint is what makes "one per purchase" hold rather than a
+check that races itself — buy the document twice and you have two things to say
+about it. A refund takes the purchase back and the right to review it with it.
+Nothing is on the listing until an admin publishes it from the moderation
+queue, so the average on the card is what a human let through; the decision is
+forward-only, like an order's, so two moderators clicking leave one winner.
+This one is not a workflow, unlike the listing review below it on the same
+admin page: a rating waits for nothing and moves no money, so the queue is the
+PENDING rows themselves rather than a run parked on a signal.
+
+**Review a listing.** Submitting a product starts the `product-review` workflow: mark
 pending, wait for the `review` signal (7-day timeout → rejected), publish or
 reject. The run lives in `workflow_runs`; a deploy in between changes nothing.
 
@@ -114,7 +127,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 91 unit tests anywhere; 15 flow tests need DATABASE_URL
+pnpm test                       # 100 unit tests anywhere; 17 flow tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
 pnpm typecheck && pnpm build
@@ -166,14 +179,14 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription + payout state machines, the fee split, plans, download access, seller analytics, sign-in link rules
+  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
-  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, seller/payouts, admin, workflows/tick
+  server/        billing · workflows · payouts · reviews · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
-  components/    the client bits: SSE reader, checkout buttons, forms · empty state
+  components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
 tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
 evals/           the assistant eval suite: questions · harness · report
