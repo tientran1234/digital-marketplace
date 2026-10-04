@@ -23,6 +23,7 @@ model User {
   sessions      Session[]
   products      Product[]
   orders        Order[]
+  reviews       Review[]
   payoutAccount PayoutAccount?
   payouts       Payout[]
   subscriptions Subscription[]
@@ -84,6 +85,7 @@ model Product {
   fileKey     String?
   chunks      ProductChunk[]
   orders      Order[]
+  reviews     Review[]
   traces      AgentTrace[]
   views       ProductView[]
   /// The durable-workflow run that owns this product's review, if any.
@@ -124,11 +126,36 @@ model Order {
   providerRef String?  @unique
   checkoutRef String?  @unique
   payout      Payout?
+  review      Review?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   @@index([buyerId, status])
   @@index([productId, status])
+}
+
+/// A buyer's rating of a product, earned by one purchase. The unique orderId is
+/// what stops a second review of the same sale — buy twice and you may say so
+/// twice. Nothing reaches the product page before an admin has read it, and the
+/// status moves forward only (src/domain/review.ts).
+model Review {
+  id        String   @id @default(cuid())
+  orderId   String   @unique
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyerId   String
+  buyer     User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  rating    Int
+  body      String?
+  status    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The card's average reads published rows of one product; the queue reads
+  /// pending rows of all of them.
+  @@index([productId, status])
+  @@index([status, createdAt])
 }
 
 /// A seller's connected account at the provider. One per seller; the provider

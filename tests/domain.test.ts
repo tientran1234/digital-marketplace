@@ -5,6 +5,16 @@ import { canUse, entitlementsFor } from "@/domain/plans";
 import { downloadAccess } from "@/domain/access";
 import { PURCHASE_STATUSES, analyticsAccess, countsAsPurchase, countsAsView, totals } from "@/domain/analytics";
 import {
+  NO_RATINGS,
+  RATING_MAX,
+  RATING_MIN,
+  REVIEW_STATUSES,
+  canTransitionReview,
+  ratingSummary,
+  reviewEligibility,
+  reviewPredecessorsOf,
+} from "@/domain/review";
+import {
   PAYOUT_STATUSES,
   PLATFORM_FEE_BPS,
   canTransitionPayout,
@@ -159,5 +169,66 @@ describe("payout totals", () => {
       { currency: "vnd", pendingMinor: 0, paidMinor: 200, reversedMinor: 0 },
     ]);
     expect(payoutTotals([])).toEqual([]);
+  });
+});
+
+describe("review eligibility", () => {
+  const paid = { id: "o1", status: "PAID", reviewed: false };
+
+  it("needs a purchase of your own that is still a purchase", () => {
+    expect(reviewEligibility({ userId: null, orders: [paid] })).toMatchObject({ allowed: false, reason: "anonymous" });
+    expect(reviewEligibility({ userId: "b", orders: [] })).toMatchObject({ allowed: false, reason: "not_purchased" });
+    expect(reviewEligibility({ userId: "b", orders: [{ ...paid, status: "PENDING" }] })).toMatchObject({ allowed: false, reason: "not_purchased" });
+    // The refund took the product back, so it took the right to review it back.
+    expect(reviewEligibility({ userId: "b", orders: [{ ...paid, status: "REFUNDED" }] })).toMatchObject({ allowed: false, reason: "not_purchased" });
+    expect(reviewEligibility({ userId: "b", orders: [paid] })).toEqual({ allowed: true, orderId: "o1" });
+  });
+
+  /** One review per purchase is the whole rule: the second one needs a second sale. */
+  it("names the purchase that has not spoken yet, and refuses when none is left", () => {
+    expect(reviewEligibility({ userId: "b", orders: [{ ...paid, reviewed: true }] })).toMatchObject({ allowed: false, reason: "already_reviewed" });
+    expect(
+      reviewEligibility({ userId: "b", orders: [{ ...paid, reviewed: true }, { id: "o2", status: "PAID", reviewed: false }] }),
+    ).toEqual({ allowed: true, orderId: "o2" });
+  });
+});
+
+describe("review state machine", () => {
+  it("is forward-only, and a moderator's decision is the end of it", () => {
+    expect(canTransitionReview("PENDING", "PUBLISHED")).toBe(true);
+    expect(canTransitionReview("PENDING", "REJECTED")).toBe(true);
+    for (const to of REVIEW_STATUSES) {
+      expect(canTransitionReview("PUBLISHED", to)).toBe(false);
+      expect(canTransitionReview("REJECTED", to)).toBe(false);
+    }
+  });
+
+  /** The conditional UPDATE leans on this: two admins clicking leave one winner. */
+  it("cannot decide the same review twice", () => {
+    expect(reviewPredecessorsOf("PUBLISHED")).toEqual(["PENDING"]);
+    expect(reviewPredecessorsOf("REJECTED")).toEqual(["PENDING"]);
+    expect(reviewPredecessorsOf("PENDING")).toEqual([]);
+  });
+});
+
+describe("rating summary", () => {
+  it("has no number for a product nobody has rated", () => {
+    expect(ratingSummary({ count: 0, sumOfRatings: 0 })).toEqual(NO_RATINGS);
+    expect(NO_RATINGS.average).toBeNull();
+  });
+
+  it("rounds to one decimal, in one place, so every view shows the same number", () => {
+    expect(ratingSummary({ count: 4, sumOfRatings: 17 })).toEqual({ count: 4, average: 4.3 });
+    expect(ratingSummary({ count: 3, sumOfRatings: 12 })).toEqual({ count: 3, average: 4 });
+    expect(ratingSummary({ count: 1, sumOfRatings: RATING_MAX })).toEqual({ count: 1, average: 5 });
+    expect(ratingSummary({ count: 2, sumOfRatings: RATING_MIN * 2 })).toEqual({ count: 2, average: 1 });
+  });
+
+  it("keeps the average inside the scale it was rated on", () => {
+    for (const [count, sum] of [[1, 1], [7, 21], [10, 50], [3, 7]]) {
+      const { average } = ratingSummary({ count, sumOfRatings: sum });
+      expect(average).toBeGreaterThanOrEqual(RATING_MIN);
+      expect(average).toBeLessThanOrEqual(RATING_MAX);
+    }
   });
 });
