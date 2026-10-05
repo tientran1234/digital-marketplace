@@ -19,6 +19,8 @@ Built on four libraries extracted from it:
 
 The RAG pipeline (structure-aware chunking → embeddings → pgvector → MMR
 re-ranking) lives in `src/rag/` and runs on Postgres alone — no vector service.
+The marketplace's own search runs there too: full-text and pgvector over the
+same chunks, fused by rank.
 Uploads are `.md`, `.txt` or `.pdf`; `server/extract.ts` flattens a PDF to text
 before the chunker sees it, and refuses a scan with no text layer rather than
 indexing an empty document. The file itself goes through `server/storage.ts`:
@@ -56,6 +58,20 @@ a run that dies half way through an answer still costs the message. The agent
 has two tools — `search_docs` (retrieve + MMR over the product's chunks) and
 `product_facts` — a hard cap of six iterations, and a tracer that writes every
 run's spans, tokens and cost to `AgentTrace` for the admin page.
+
+**Search.** A marketplace that reads titles cannot find the listing whose
+answer is on page nine, which is most of what is for sale here. So
+`server/search.ts` runs two arms over the same index the assistant retrieves
+from: Postgres full-text across the title, the description and every chunk,
+and pgvector across the chunks, fused with reciprocal rank fusion — positions,
+not scores, because a `ts_rank` and a cosine similarity cannot be added. The
+arms are asymmetric and the page says so. Full text is precise and returns
+nothing for a query no document contains a word of; the vector arm answers
+everything and has no threshold to refuse with, so when nothing matched the
+words a buyer typed the results are labelled as the closest documents rather
+than left looking like matches. The card names the passage it matched on,
+which is the only way a buyer can tell why a listing whose description says
+nothing about dunning came back for "dunning".
 
 **Rate.** A purchase earns one review: the `Review` row is keyed by the order,
 so the unique constraint is what makes "one per purchase" hold rather than a
@@ -127,9 +143,10 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 100 unit tests anywhere; 17 flow tests need DATABASE_URL
+pnpm test                       # 106 unit tests anywhere; 25 flow and search tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
+                                # with DATABASE_URL, also search relevance per arm
 pnpm typecheck && pnpm build
 ```
 
@@ -151,7 +168,10 @@ outside a mailbox, since the database keeps its SHA-256.
 naming the passage that answers it and the fact the answer must carry. It runs
 the real chunker, embedder, MMR and agent prompt against an in-memory index, so
 it needs no database and no key; `EVAL_MODEL=1` swaps the extractive baseline
-for the real model. Numbers and what they mean: [`evals/README.md`](evals/README.md).
+for the real model. The search-relevance section is the exception: the lexical
+arm is Postgres itself, so twenty search queries are scored per arm when
+`DATABASE_URL` is set and skipped when it is not. Numbers and what they mean:
+[`evals/README.md`](evals/README.md).
 
 ## The UI
 
@@ -181,15 +201,15 @@ languages, instead of one grey sentence or a table of headers with no rows.
 src/
   domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
-  rag/           chunk · embed (Voyage, hash) · mmr · store (pgvector, raw SQL) · retrieve
+  rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · reviews · assistant · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  server/        billing · workflows · payouts · reviews · assistant · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
   app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows on real Postgres
+tests/           domain, rag, rank fusion, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
-evals/           the assistant eval suite: questions · harness · report
+evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 ```
 

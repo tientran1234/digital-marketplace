@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-05
+
+- Hybrid search: Postgres full-text plus pgvector fused with reciprocal rank fusion over title, description and chunks — positions rather than scores, because a `ts_rank` and a cosine similarity share no unit, so a buyer now finds a listing by what is on page nine of its document and not only by what its description claims; the arms stay asymmetric on purpose, full text returning nothing for a query no document contains a word of while the vector arm answers everything with no threshold to refuse with, which is why results that matched no word are labelled as the closest documents rather than left looking like matches; the eval suite gains a search-relevance section scoring each arm and the fusion over twenty queries, and it needs a database because the lexical arm is Postgres itself.
+
 ## 2026-10-04
 
 - Reviews and ratings: only buyers with a PAID order may review, one review per purchase, a moderation queue in admin, and the average rating on the product card — the row is keyed by the order rather than the buyer, so the unique constraint is what holds "one per purchase" and a second sale earns a second review; nothing a buyer writes reaches a listing until an admin publishes it, so the number on the card is what a human let through, and the decision is forward-only like an order's rather than a run parked on a signal, because a rating waits for nothing and moves no money.
