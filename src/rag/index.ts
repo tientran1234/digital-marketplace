@@ -3,6 +3,8 @@ export type { Chunk, ChunkOptions } from "./chunk";
 export { VoyageEmbedder, HashEmbedder, EMBEDDING_DIMENSIONS } from "./embed";
 export type { Embedder } from "./embed";
 export { mmr, cosine } from "./mmr";
+export { reciprocalRankFusion, RRF_K } from "./rrf";
+export type { Fused, Ranks } from "./rrf";
 export { indexProduct, nearestChunks } from "./store";
 export type { StoredChunk } from "./store";
 export { retrieve } from "./retrieve";
