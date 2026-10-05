@@ -1,6 +1,19 @@
 {
   "nav": { "market": "Chợ", "sell": "Bán", "account": "Tài khoản", "admin": "Quản trị", "login": "Đăng nhập", "logout": "Đăng xuất" },
-  "home": { "title": "Sản phẩm số", "subtitle": "Template, hướng dẫn và tài liệu — mỗi sản phẩm có một trợ lý đã đọc kỹ nội dung.", "empty": "Chưa có sản phẩm nào.", "emptyHint": "Sản phẩm đã đăng sẽ hiện ở đây — người bán cần gửi duyệt trước.", "free": "Miễn phí" },
+  "home": {
+    "title": "Sản phẩm số",
+    "subtitle": "Template, hướng dẫn và tài liệu — mỗi sản phẩm có một trợ lý đã đọc kỹ nội dung.",
+    "searchLabel": "Tìm trong tin đăng và tài liệu đi kèm",
+    "searchPlaceholder": "thời hạn hoàn tiền, review hàng tuần…",
+    "searchAction": "Tìm",
+    "nearestOnly": "Không có từ nào khớp chính xác — đây là những tài liệu gần nhất.",
+    "foundIn": "Tìm thấy trong “{passage}”",
+    "noResults": "Không có kết quả cho “{query}”.",
+    "noResultsHint": "Tìm kiếm đọc cả tiêu đề, mô tả và nội dung bên trong từng tài liệu — thử ít từ khoá hơn.",
+    "empty": "Chưa có sản phẩm nào.",
+    "emptyHint": "Sản phẩm đã đăng sẽ hiện ở đây — người bán cần gửi duyệt trước.",
+    "free": "Miễn phí"
+  },
   "product": {
     "by": "bởi {seller}",
     "buy": "Mua với giá {price}",

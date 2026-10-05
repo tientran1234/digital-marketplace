@@ -1,6 +1,19 @@
 {
   "nav": { "market": "Marketplace", "sell": "Sell", "account": "Account", "admin": "Admin", "login": "Sign in", "logout": "Sign out" },
-  "home": { "title": "Digital products", "subtitle": "Templates, guides and documents — each one with an assistant that has actually read it.", "empty": "Nothing published yet.", "emptyHint": "Published products appear here — sellers submit them for review first.", "free": "Free" },
+  "home": {
+    "title": "Digital products",
+    "subtitle": "Templates, guides and documents — each one with an assistant that has actually read it.",
+    "searchLabel": "Search listings and the documents behind them",
+    "searchPlaceholder": "refund window, weekly review…",
+    "searchAction": "Search",
+    "nearestOnly": "Nothing matched those words exactly — these are the closest documents.",
+    "foundIn": "Found in “{passage}”",
+    "noResults": "Nothing matches “{query}”.",
+    "noResultsHint": "Search reads listing titles and descriptions as well as the text inside each document — try fewer words.",
+    "empty": "Nothing published yet.",
+    "emptyHint": "Published products appear here — sellers submit them for review first.",
+    "free": "Free"
+  },
   "product": {
     "by": "by {seller}",
     "buy": "Buy for {price}",

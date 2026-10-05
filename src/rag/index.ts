@@ -5,7 +5,7 @@ export type { Embedder } from "./embed";
 export { mmr, cosine } from "./mmr";
 export { reciprocalRankFusion, RRF_K } from "./rrf";
 export type { Fused, Ranks } from "./rrf";
-export { indexProduct, nearestChunks } from "./store";
+export { indexProduct, nearestChunks, toVectorLiteral } from "./store";
 export type { StoredChunk } from "./store";
 export { retrieve } from "./retrieve";
 export type { ChunkSearch, Passage, RetrieveOptions } from "./retrieve";
