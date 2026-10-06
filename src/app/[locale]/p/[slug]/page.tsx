@@ -5,7 +5,6 @@ import { money } from "@/lib/format";
 import { downloadAccess } from "@/domain/access";
 import { getCurrentUser } from "@/server/auth";
 import { recordProductView } from "@/server/analytics";
-import { threadFor } from "@/server/conversations";
 import { entitlementsForUser } from "@/server/billing";
 import { currentPeriod } from "@/server/usage";
 import { productRating, publishedReviews, reviewEligibilityFor } from "@/server/reviews";
@@ -33,12 +32,10 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
   // fails must never take the page the buyer came for down with it.
   if (product.status === "PUBLISHED") await recordProductView(product, user?.id ?? null).catch(() => {});
 
-  const [rated, reviews, mayReview, thread] = await Promise.all([
+  const [rated, reviews, mayReview] = await Promise.all([
     productRating(product.id),
     publishedReviews(product.id),
     reviewEligibilityFor(product.id, user?.id ?? null),
-    // Only ever this reader's own thread: a listing has as many as it has askers.
-    threadFor(user?.id ?? null, product.id),
   ]);
 
   const price = money(product.priceMinor, product.currency, locale);
@@ -71,7 +68,7 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
       </div>
       {user ? (
         <>
-          <AskBox productId={product.id} history={thread} />
+          <AskBox productId={product.id} />
           {quota && <p className="muted">{t("quota", quota)}</p>}
         </>
       ) : (

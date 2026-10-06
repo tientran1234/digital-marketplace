@@ -72,19 +72,9 @@ form { max-width:520px; }
 table { width:100%; border-collapse:collapse; font-size:var(--text-md); }
 th, td { text-align:left; padding:var(--space-2) var(--space-1); border-bottom:1px solid var(--line); vertical-align:top; }
 th { color:var(--muted); font-weight:500; }
-/* The answer arriving now and one the thread remembers read the same; only the
-   live one holds space open for the skeleton lines while it waits. */
-.answer, .thread .reply { white-space:pre-wrap; border:1px solid var(--line); border-radius:var(--radius-2); background:var(--surface); padding:var(--space-4); margin-top:var(--space-3); }
-.answer { min-height:60px; }
+.answer { white-space:pre-wrap; border:1px solid var(--line); border-radius:var(--radius-2); background:var(--surface); padding:var(--space-4); margin-top:var(--space-3); min-height:60px; }
 .chips { display:flex; gap:var(--space-1); flex-wrap:wrap; margin-top:var(--space-2); }
 .err { color:var(--bad); }
-
-/* The thread above the ask box: what this buyer has already asked of this
-   listing, which is also what the next answer is written inside. The question
-   carries the weight, because it is what a buyer scans for. */
-.thread { list-style:none; margin:var(--space-4) 0 0; padding:0; }
-.thread li + li { margin-top:var(--space-5); }
-.thread .asked { margin:0; font-weight:600; max-width:var(--measure); }
 
 /* Skeleton lines for the ask box: the answer arrives token by token, so the
    wait is long enough that a spinner would lie about it being one moment. */
