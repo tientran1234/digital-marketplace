@@ -6,7 +6,7 @@
  *   DATABASE_URL=… pnpm test
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { FakeProvider, callTools, reply, type AgentEvent } from "agent-runtime";
+import { FakeProvider, callTools, reply, textOf, type AgentEvent, type ChatMessage } from "agent-runtime";
 import { db } from "@/lib/db";
 import { pool } from "@/lib/pg";
 import { HashEmbedder, indexProduct, retrieve } from "@/rag";
@@ -19,6 +19,7 @@ import { sellerPayoutStatus, startPayoutOnboarding } from "@/server/payouts";
 import { moderateReview, pendingReviews, productRating, publishedReviews, reviewEligibilityFor, submitReview } from "@/server/reviews";
 import { NO_RATINGS } from "@/domain/review";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
+import { recordTurn, threadFor } from "@/server/conversations";
 import { currentPeriod } from "@/server/usage";
 import { issueSession } from "@/server/auth";
 import { setMailerForTests, type Email } from "@/server/mail";
@@ -26,6 +27,9 @@ import { MAX_REQUESTS, LINK_TTL_MS } from "@/domain/magic-link";
 import { hashLoginToken, redeemSignInLink, requestSignInLink } from "@/server/magic-link";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
+
+/** The text of a window, in order — what the model was actually handed. */
+const said = (messages: readonly ChatMessage[]) => messages.map((m) => textOf(m.content as never));
 
 describe.skipIf(!hasDb)("marketplace flows", () => {
   const billing = new FakeBillingProvider();
@@ -238,6 +242,65 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     expect((await entitlementsForUser(buyerId)).planKey).toBe("free");
   });
 
+  it("assistant: a follow-up is asked inside the thread the first question started", async () => {
+    const user = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    const product = await db.product.findUniqueOrThrow({ where: { id: productId }, include: { seller: { select: { name: true } } } });
+
+    setModelProviderForTests(new FakeProvider([reply("Fourteen days.")], "claude-opus-5"));
+    await askAboutProduct({ user, product, question: "How long do I have to ask for a refund?" });
+
+    const second = new FakeProvider([reply("From the day you paid.")], "claude-opus-5");
+    setModelProviderForTests(second);
+    await askAboutProduct({ user, product, question: "And from when?" });
+
+    // "And from when?" is only a question at all because the window it arrived
+    // in still holds what it is a follow-up to.
+    expect(said(second.calls[0]!.messages)).toEqual(["How long do I have to ask for a refund?", "Fourteen days.", "And from when?"]);
+    expect(await threadFor(buyerId, productId)).toEqual([
+      { question: "How long do I have to ask for a refund?", answer: "Fourteen days." },
+      { question: "And from when?", answer: "From the day you paid." },
+    ]);
+  });
+
+  it("thread: two tabs asking at once take two turns, and nobody reads anybody else's", async () => {
+    await recordTurn({ userId: buyerId, productId, turn: { question: "q1", answer: "a1" } });
+    // Both ordinals come from the thread's own counter, so neither of these
+    // loses its turn to the other's unique constraint.
+    await Promise.all([
+      recordTurn({ userId: buyerId, productId, turn: { question: "q2", answer: "a2" } }),
+      recordTurn({ userId: buyerId, productId, turn: { question: "q3", answer: "a3" } }),
+    ]);
+
+    const turns = await threadFor(buyerId, productId);
+    expect(turns[0]).toEqual({ question: "q1", answer: "a1" });
+    // Either tab may have taken the lock first; what matters is that both got
+    // a turn rather than one of them losing its ordinal to the other.
+    expect(turns.slice(1).map((t) => t.question).sort()).toEqual(["q2", "q3"]);
+    // A listing has as many threads as it has askers, and none of them is shared.
+    expect(await threadFor(sellerId, productId)).toEqual([]);
+  });
+
+  it("assistant: a thread past the budget comes back as a summary and not as itself", async () => {
+    const user = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
+    const product = await db.product.findUniqueOrThrow({ where: { id: productId }, include: { seller: { select: { name: true } } } });
+    // Twelve long exchanges: more conversation than one call is allowed to carry.
+    for (let i = 0; i < 12; i++) {
+      await recordTurn({ userId: buyerId, productId, turn: { question: `question ${i}`, answer: `answer ${i} `.repeat(80) } });
+    }
+
+    const provider = new FakeProvider([reply("The latest answer.")], "claude-opus-5");
+    setModelProviderForTests(provider);
+    await askAboutProduct({ user, product, question: "And the last one?" });
+
+    const window = said(provider.calls[0]!.messages);
+    expect(window[0]).toContain("- question 0");
+    expect(window[0]).not.toContain("answer 0");
+    expect(window.at(-1)).toBe("And the last one?");
+    // Nothing was folded away in the database: the turns are all still there,
+    // and the next call derives its own window from them.
+    expect(await threadFor(buyerId, productId)).toHaveLength(13);
+  });
+
   it("assistant: a provider error before any output gives the message back", async () => {
     const user = await db.user.findUniqueOrThrow({ where: { id: buyerId } });
     const product = await db.product.findUniqueOrThrow({ where: { id: productId }, include: { seller: { select: { name: true } } } });
@@ -260,6 +323,10 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     await expect(askAboutProduct({ user, product, question: "How much is it?", onEvent })).rejects.toThrow("provider is down");
     expect(seen.join("")).toBe("Let me check the listing.");
     expect(await used()).toBe(1);
+
+    // Neither run reached an answer, so the next window opens on nothing
+    // rather than on a question the assistant never took.
+    expect(await threadFor(buyerId, productId)).toEqual([]);
   });
 });
 

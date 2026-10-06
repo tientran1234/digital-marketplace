@@ -22,6 +22,7 @@
     "unpublished": "Sản phẩm chưa được đăng.",
     "askTitle": "Hỏi về sản phẩm này",
     "askHint": "Câu trả lời lấy từ chính tài liệu của sản phẩm, có trích dẫn.",
+    "threadHint": "Câu hỏi tiếp theo được trả lời trong cùng luồng này.",
     "askPlaceholder": "Chương 3 nói về gì?",
     "ask": "Hỏi",
     "signInToAsk": "Đăng nhập để hỏi.",
