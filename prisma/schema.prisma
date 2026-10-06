@@ -29,6 +29,7 @@ model User {
   subscriptions Subscription[]
   usage         UsageCounter[]
   traces        AgentTrace[]
+  threads       Thread[]
   createdAt     DateTime       @default(now())
 }
 
@@ -88,6 +89,7 @@ model Product {
   reviews     Review[]
   traces      AgentTrace[]
   views       ProductView[]
+  threads     Thread[]
   /// The durable-workflow run that owns this product's review, if any.
   reviewRunId String?
   createdAt   DateTime       @default(now())
@@ -100,9 +102,9 @@ model Product {
 /// One chunk of a product's document, with its embedding. Written and queried
 /// through raw SQL because Prisma cannot express the vector type or `<=>`.
 model ProductChunk {
-  id         String                 @id @default(cuid())
+  id         String                       @id @default(cuid())
   productId  String
-  product    Product                @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product    Product                      @relation(fields: [productId], references: [id], onDelete: Cascade)
   ordinal    Int
   heading    String?
   content    String
@@ -110,6 +112,50 @@ model ProductChunk {
   embedding  Unsupported("vector(1024)")?
 
   @@unique([productId, ordinal])
+}
+
+/// One person's conversation with one listing's assistant. Keyed by the pair,
+/// so a second question continues the thread the first one started rather than
+/// opening a new one. Not keyed to an order: anyone who can see the listing may
+/// ask about it, and a seller previewing their own draft has a thread too.
+///
+/// There is no summary column. What the model is sent when a thread outgrows
+/// its window is folded out of these turns on every call, the way an
+/// entitlement is derived from a subscription — a fold written down here would
+/// have to be kept in step with the rows it was folded from.
+model Thread {
+  id        String       @id @default(cuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// Where the next turn's ordinal comes from. `turnCount + 1` takes the row's
+  /// lock, so a buyer with two tabs open takes two numbers rather than one of
+  /// them failing on the unique constraint after the model has already answered.
+  turnCount Int          @default(0)
+  turns     ThreadTurn[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([userId, productId])
+}
+
+/// One exchange of a thread: the question and the answer it earned. One row
+/// rather than two, because an unanswered question is not a turn — a run that
+/// died before its first token left the next window nothing to read. The tool
+/// calls and the passages they returned are not here: the run's trace has them,
+/// and the next question is better served by searching the document again than
+/// by carrying page nine around.
+model ThreadTurn {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  ordinal   Int
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
+
+  @@unique([threadId, ordinal])
 }
 
 /// A one-time purchase. Status moves forward only (src/domain/order.ts).
