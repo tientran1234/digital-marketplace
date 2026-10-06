@@ -3,11 +3,10 @@
 A marketplace for digital products where every listing comes with an
 assistant that has actually read it. Sellers upload a document, buyers purchase
 it once or subscribe, and questions get answered from the document itself —
-with citations, and inside the thread the last question started, so a
-follow-up is a follow-up. Buyers rate what they paid for, once per purchase,
-and a moderator decides what reaches the listing. Listing review, refunds and
-seller payouts are durable workflows that wait — for a human, or for an
-onboarding to finish. English and Vietnamese.
+with citations. Buyers rate what they paid for, once per purchase, and a
+moderator decides what reaches the listing. Listing review, refunds and seller
+payouts are durable workflows that wait — for a human, or for an onboarding to
+finish. English and Vietnamese.
 
 Built on four libraries extracted from it:
 
@@ -59,27 +58,6 @@ a run that dies half way through an answer still costs the message. The agent
 has two tools — `search_docs` (retrieve + MMR over the product's chunks) and
 `product_facts` — a hard cap of six iterations, and a tracer that writes every
 run's spans, tokens and cost to `AgentTrace` for the admin page.
-
-**Remember.** A question nobody can ask a second one about is a search box with
-a nicer font, so every exchange is a `ThreadTurn` row keyed to the reader and
-the listing, and the agent's window is that thread: "and in euros?" resolves
-against what it is a follow-up to, and the product page shows the reader what
-they were told last week without their asking again. The question and the
-answer are one row, because a run that died before its first token left nothing
-worth remembering; the tool calls and the passages they returned are not in it
-at all, since the trace already has them and `search_docs` can read page nine
-again more cheaply than every later call can carry it.
-
-Past a budget of 2,000 tokens of history, `ConversationMemory` drops whole
-turns from the oldest end — whole, so no question is ever sent without the
-answer it earned — and what replaces them is the questions, clipped, twenty at
-most. Not the answers: a follow-up needs to know what was asked, while the
-answers came out of a document that is still there to be searched. And not a
-model call either, which would cost the buyer a message they never asked for
-and could fail in the middle of the one they did. So the fold is a function of
-the turns, derived on every call rather than written down beside the rows it
-came from — the same reason entitlements are derived from a subscription here
-instead of stored next to it.
 
 **Search.** A marketplace that reads titles cannot find the listing whose
 answer is on page nine, which is most of what is for sale here. So
@@ -165,7 +143,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 114 unit tests anywhere; 28 flow and search tests need DATABASE_URL
+pnpm test                       # 106 unit tests anywhere; 25 flow and search tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -221,15 +199,15 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, the assistant's conversation window
+  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  server/        billing · workflows · payouts · reviews · assistant · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
   app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, rank fusion, the conversation window, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
+tests/           domain, rag, rank fusion, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
 evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
