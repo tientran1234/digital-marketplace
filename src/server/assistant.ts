@@ -17,7 +17,9 @@ import { AnthropicProvider } from "agent-runtime/anthropic";
 import type { Product, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { language } from "@/lib/format";
 import { threadMemory } from "@/domain/conversation";
+import { localiseListing, type ListingTranslation } from "@/domain/listing";
 import { canUse } from "@/domain/plans";
 import { extractiveBaseline, fakesRequested } from "@/providers/fake";
 import { HashEmbedder, VoyageEmbedder, retrieve, type ChunkSearch, type Embedder } from "@/rag";
@@ -78,12 +80,21 @@ export class AssistantGateError extends Error {
 }
 
 /** What the agent needs to know about the listing. */
-export type AssistantProduct = Pick<Product, "id" | "title" | "priceMinor" | "currency" | "status"> & { seller: { name: string } };
+export type AssistantProduct = Pick<Product, "id" | "title" | "description" | "locale" | "priceMinor" | "currency" | "status"> & {
+  seller: { name: string };
+  translations?: readonly ListingTranslation[];
+};
 
 export interface AssistantAgentOptions {
   embedder?: Embedder;
   /** Where search_docs looks. Defaults to pgvector; the eval harness passes an in-memory index. */
   search?: ChunkSearch;
+  /**
+   * The language the buyer is reading the listing in. Defaults to the one the
+   * listing was written in, so a caller with no reader to speak of — the eval
+   * harness — gets the listing's own language rather than a guess.
+   */
+  locale?: string;
 }
 
 /**
@@ -92,6 +103,12 @@ export interface AssistantAgentOptions {
  * rather than a copy of it that drifts.
  */
 export function assistantAgent(product: AssistantProduct, options: AssistantAgentOptions = {}) {
+  // The listing in the buyer's language, which is the text they are asking
+  // about: answering off the English title when the card they clicked was in
+  // Vietnamese reads as an answer about some other product.
+  const reader = options.locale ?? product.locale;
+  const listing = localiseListing(product, reader);
+
   const searchDocs = defineTool({
     name: "search_docs",
     description: "Search the product's own documentation. Returns numbered passages to cite.",
@@ -105,10 +122,11 @@ export function assistantAgent(product: AssistantProduct, options: AssistantAgen
 
   const productFacts = defineTool({
     name: "product_facts",
-    description: "Listing facts: title, price, seller, status.",
+    description: "Listing facts: title, description, price, seller, status.",
     input: z.object({}),
     execute: () => ({
-      title: product.title,
+      title: listing.title,
+      description: listing.description,
       price: `${(product.priceMinor / 100).toFixed(2)} ${product.currency.toUpperCase()}`,
       seller: product.seller.name,
       status: product.status,
@@ -116,11 +134,14 @@ export function assistantAgent(product: AssistantProduct, options: AssistantAgen
   });
 
   const system = [
-    `You answer buyers' questions about the digital product "${product.title}".`,
+    `You answer buyers' questions about the digital product "${listing.title}".`,
     "Use search_docs for anything about the product's contents and cite passages as [n].",
     "Use product_facts for price, seller, or availability.",
     "If the documents do not contain the answer, say so plainly — never invent contents.",
-    "Reply in the language the user wrote in.",
+    // The buyer chose the language the rest of the page is in, and the answer
+    // belongs to the page. The documents are in whichever language the seller
+    // wrote them, so a passage quoted out of one is not a reason to switch.
+    `Reply in ${language(reader)}, whatever language the documents or the question are in.`,
   ].join(" ");
 
   return { system, tools: [searchDocs, productFacts], maxIterations: 6 };
@@ -128,12 +149,14 @@ export function assistantAgent(product: AssistantProduct, options: AssistantAgen
 
 export interface AskInput {
   user: User;
-  product: Product & { seller: { name: string } };
+  product: Product & { seller: { name: string }; translations?: readonly ListingTranslation[] };
   question: string;
+  /** The locale the buyer is reading in; the listing's own when the caller has none. */
+  locale?: string;
   onEvent?: (e: AgentEvent) => void;
 }
 
-export async function askAboutProduct({ user, product, question, onEvent }: AskInput): Promise<AgentResult> {
+export async function askAboutProduct({ user, product, question, locale, onEvent }: AskInput): Promise<AgentResult> {
   // Gate 1: does the plan include the feature. Gate 2: is there quota left.
   const entitlements = await entitlementsForUser(user.id);
   if (!canUse(entitlements, "ask_ai")) throw new AssistantGateError(403, "not included in your plan");
@@ -157,7 +180,7 @@ export async function askAboutProduct({ user, product, question, onEvent }: AskI
   try {
     const result = await runAgent({
       provider: modelProvider(question),
-      ...assistantAgent(product),
+      ...assistantAgent(product, { locale }),
       input: question,
       memory,
       tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),

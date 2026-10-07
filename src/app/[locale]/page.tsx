@@ -3,13 +3,14 @@ import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
 import { cover } from "@/lib/cover";
 import { money } from "@/lib/format";
+import { localiseListing } from "@/domain/listing";
 import { productRatings } from "@/server/reviews";
 import { searchProducts } from "@/server/search";
 import { NO_RATINGS } from "@/domain/review";
 import { EmptyState } from "@/components/EmptyState";
 import { Rating } from "@/components/Rating";
 
-const withSeller = { seller: { select: { name: true } } };
+const withSeller = { seller: { select: { name: true } }, translations: true };
 
 export default async function Home({ params, searchParams }: { params: Promise<{ locale: string }>; searchParams: Promise<{ q?: string }> }) {
   const [{ locale }, { q }] = await Promise.all([params, searchParams]);
@@ -30,7 +31,10 @@ export default async function Home({ params, searchParams }: { params: Promise<{
       {products.length === 0 ? <EmptyState title={query ? t("noResults", { query }) : t("empty")} hint={query ? t("noResultsHint") : t("emptyHint")} /> : (
         <div className="grid">
           {products.map((p) => {
-            const art = cover(p);
+            // The card is read in the buyer's language where the seller wrote
+            // it, and the cover's initials come off the title they can read.
+            const text = localiseListing(p, locale);
+            const art = cover({ slug: p.slug, title: text.title });
             const rated = ratings.get(p.id) ?? NO_RATINGS;
             const passage = matched.get(p.id);
             return (
@@ -38,8 +42,8 @@ export default async function Home({ params, searchParams }: { params: Promise<{
                 {/* The gradient is data, not decoration the stylesheet can know: it comes from the slug. */}
                 <div className="cover" style={{ background: `linear-gradient(135deg, ${art.from}, ${art.to})` }} aria-hidden>{art.initials}</div>
                 <div className="body">
-                  <h3>{p.title}</h3>
-                  <p>{p.description}</p>
+                  <h3>{text.title}</h3>
+                  <p>{text.description}</p>
                   {/* Why this listing is in the results when its description does not say so. */}
                   {passage ? <p className="match">{t("foundIn", { passage })}</p> : null}
                   <div className="price">

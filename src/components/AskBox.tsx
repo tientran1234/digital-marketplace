@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import type { ThreadTurn } from "@/domain/conversation";
 
 interface Chip { name: string; done: boolean; error?: boolean }
@@ -14,6 +14,8 @@ interface Chip { name: string; done: boolean; error?: boolean }
  */
 export function AskBox({ productId, history }: { productId: string; history: readonly ThreadTurn[] }) {
   const t = useTranslations("product");
+  // The answer belongs to the page it is read on, and the route cannot see which language that is.
+  const locale = useLocale();
   const [thread, setThread] = useState<readonly ThreadTurn[]>(history);
   const [asked, setAsked] = useState("");
   const [question, setQuestion] = useState("");
@@ -31,7 +33,7 @@ export function AskBox({ productId, history }: { productId: string; history: rea
     setAsked(question);
     setBusy(true); setAnswer(""); setChips([]); setError(null);
     try {
-      const res = await fetch(`/api/products/${productId}/ask`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
+      const res = await fetch(`/api/products/${productId}/ask`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question, locale }) });
       if (!res.ok || !res.body) { setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status}`); return; }
       const reader = res.body.getReader();
       const decoder = new TextDecoder();

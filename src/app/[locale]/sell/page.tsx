@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
+import { locales } from "@/i18n";
 import { money } from "@/lib/format";
 import { analyticsAccess, totals } from "@/domain/analytics";
 import { PLANS } from "@/domain/plans";
@@ -94,7 +95,7 @@ export default async function SellPage({ params }: { params: Promise<{ locale: s
         </tbody></table>
       )}
       <h2>{t("new")}</h2>
-      <NewProductForm />
+      <NewProductForm others={locales.filter((l) => l !== locale)} />
     </>
   );
 }

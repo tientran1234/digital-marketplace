@@ -125,8 +125,13 @@ export function grade(q: EvalQuestion, answer: string, retrieved: (string | null
 
 const ratio = (part: number, whole: number) => (whole ? part / whole : 0);
 
-/** The listing the agent sees. Ids are slugs here: the in-memory index is keyed by them. */
+/**
+ * The listing the agent sees. Ids are slugs here: the in-memory index is keyed
+ * by them. The seed corpus is English and untranslated, so the agent grades on
+ * the listing's own words — which is what it answers off for a buyer reading
+ * in the language it was written in.
+ */
 function listing(q: EvalQuestion) {
   const doc = seedDocs.find((d) => d.slug === q.slug)!;
-  return { id: doc.slug, title: doc.title, priceMinor: doc.priceMinor, currency: "usd", status: "PUBLISHED" as const, seller: { name: "Linh (seller)" } };
+  return { id: doc.slug, title: doc.title, description: doc.description, locale: "en", priceMinor: doc.priceMinor, currency: "usd", status: "PUBLISHED" as const, seller: { name: "Linh (seller)" } };
 }

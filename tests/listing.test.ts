@@ -3,7 +3,8 @@
  * for when the seller wrote it, the one it was written in when they did not.
  */
 import { describe, expect, it } from "vitest";
-import { localiseListing, writableTranslations, type TranslatableListing } from "@/domain/listing";
+import { localiseListing, writableTranslations, type ListingText, type TranslatableListing } from "@/domain/listing";
+import { assistantAgent } from "@/server/assistant";
 
 const guide: TranslatableListing = {
   title: "SaaS Pricing Playbook",
@@ -81,5 +82,42 @@ describe("what a submitted listing writes", () => {
   it("writes no row for a language left empty", () => {
     expect(writableTranslations([{ locale: "vi", title: "", description: "" }], "en")).toEqual([]);
     expect(writableTranslations([{ locale: "vi", title: " ", description: "\n" }], "en")).toEqual([]);
+  });
+});
+
+describe("the listing the assistant answers about", () => {
+  const product = { id: "p1", ...guide, priceMinor: 1900, currency: "usd", status: "PUBLISHED" as const, seller: { name: "Linh" } };
+  const facts = async (options: Parameters<typeof assistantAgent>[1]) => {
+    const tool = assistantAgent(product, options).tools.find((t) => t.name === "product_facts")!;
+    // product_facts takes no input; the cast is for the tool array's union type, not the call.
+    return (await tool.execute({} as never, {})) as ListingText;
+  };
+
+  it("asks about the listing in the buyer's language, and answers in it", () => {
+    const { system } = assistantAgent(product, { locale: "vi" });
+
+    expect(system).toContain("Sổ tay định giá SaaS");
+    expect(system).toContain("Reply in Vietnamese");
+    // Answering off the English title is answering about a listing the buyer never saw.
+    expect(system).not.toContain("SaaS Pricing Playbook");
+  });
+
+  it("still answers in the buyer's language when the listing was never written in it", () => {
+    const { system } = assistantAgent({ ...product, translations: [] }, { locale: "vi" });
+
+    expect(system).toContain("SaaS Pricing Playbook");
+    expect(system).toContain("Reply in Vietnamese");
+  });
+
+  it("answers in the listing's own language when the caller names no reader", () => {
+    expect(assistantAgent(product).system).toContain("Reply in English");
+  });
+
+  it("hands product_facts the same words the page is showing", async () => {
+    await expect(facts({ locale: "vi" })).resolves.toMatchObject({
+      title: "Sổ tay định giá SaaS",
+      description: "Cách chọn gói, mức giá và hạn mức.",
+    });
+    await expect(facts({ locale: "en" })).resolves.toMatchObject({ title: "SaaS Pricing Playbook" });
   });
 });

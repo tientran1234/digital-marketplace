@@ -1,8 +1,9 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
-import { money } from "@/lib/format";
+import { language, money } from "@/lib/format";
 import { downloadAccess } from "@/domain/access";
+import { localiseListing } from "@/domain/listing";
 import { getCurrentUser } from "@/server/auth";
 import { recordProductView } from "@/server/analytics";
 import { threadFor } from "@/server/conversations";
@@ -19,7 +20,7 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
   const { locale, slug } = await params;
   const [t, tReviews] = await Promise.all([getTranslations("product"), getTranslations("reviews")]);
   const [product, user] = await Promise.all([
-    db.product.findUnique({ where: { slug }, include: { seller: { select: { name: true } } } }),
+    db.product.findUnique({ where: { slug }, include: { seller: { select: { name: true } }, translations: true } }),
     getCurrentUser(),
   ]);
   if (!product) notFound();
@@ -41,6 +42,7 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
     threadFor(user?.id ?? null, product.id),
   ]);
 
+  const text = localiseListing(product, locale);
   const price = money(product.priceMinor, product.currency, locale);
   let quota: { used: number; limit: number } | null = null;
   if (user) {
@@ -51,12 +53,15 @@ export default async function ProductPage({ params }: { params: Promise<{ locale
 
   return (
     <>
-      <h1>{product.title}</h1>
+      <h1>{text.title}</h1>
       <p className="sub">
         {t("by", { seller: product.seller.name })} · {price ?? "Free"}
         {rated.average !== null && <> · <Rating summary={rated} locale={locale} label={tReviews("rated", { average: rated.average, count: rated.count })} /></>}
       </p>
-      <p>{product.description}</p>
+      <p>{text.description}</p>
+      {/* The seller has not written this listing in the reader's language. Say
+          which one they are getting instead, rather than let it look chosen. */}
+      {text.fallback && <p className="muted">{t("notTranslated", { language: language(text.locale, locale) })}</p>}
       <div className="row" style={{ margin: "20px 0" }}>
         {access.allowed ? (
           <>
