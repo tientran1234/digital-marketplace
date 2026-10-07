@@ -95,6 +95,28 @@ than left looking like matches. The card names the passage it matched on,
 which is the only way a buyer can tell why a listing whose description says
 nothing about dunning came back for "dunning".
 
+**Read it in your language.** The interface was already in English and
+Vietnamese while every listing in it was in one language, so a buyer on `/vi`
+read Vietnamese chrome around an English card. A listing now carries the
+language it was written in, and a `ProductTranslation` row per further locale
+carries the seller's own words for it — their words, not a machine's, which is
+why an untranslated listing falls back instead of being translated on the way
+out. `domain/listing.ts` resolves which pair a reader gets, and the grid, the
+product page and the assistant's prompt all go through it, so a listing cannot
+be Vietnamese on the card and English on its own page. A translation counts
+only with both fields written: half of one reads as a broken page rather than a
+partly translated one, which is the stance the interface copy is already held
+to. Where it falls back, the page says which language it fell back to rather
+than letting it look chosen.
+
+The seller's form carries the pair again for each other locale, neither field
+required — a language left empty means the listing reads in its own there,
+which is better than a seller padding out a translation to get past the form.
+The assistant is told the locale the buyer is reading in, names the listing by
+the title they can see and answers in their language whatever language the
+document it quotes is in; the ask route sits outside the `[locale]` segment and
+cannot see it, so the box sends it.
+
 **Rate.** A purchase earns one review: the `Review` row is keyed by the order,
 so the unique constraint is what makes "one per purchase" hold rather than a
 check that races itself — buy the document twice and you have two things to say
@@ -221,7 +243,7 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, the assistant's conversation window
+  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, the assistant's conversation window, which words a listing shows which reader
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
@@ -229,7 +251,7 @@ src/
   app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, rank fusion, the conversation window, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
+tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
 evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
@@ -237,6 +259,19 @@ scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
 
 ## What is deliberately not here
 
+- **Searching a listing in its translation.** The full-text arm indexes the
+  product's own title and description, so a Vietnamese buyer typing Vietnamese
+  words reaches a listing through the document behind it, or through the vector
+  arm, but not through a title only a `ProductTranslation` row holds. Covering
+  the translations means a second `tsvector` per locale and a text search
+  configuration for each — Postgres has no Vietnamese one — and the question of
+  which locale's index a query is even for. The listing reads in the buyer's
+  language either way; finding it by those words is the next piece of work, not
+  a line in this one.
+- **Translating a listing the seller did not translate.** A fallback shows the
+  words they wrote. Nothing here calls a model to render them into the reader's
+  language, because a listing is what is being sold and a machine's paraphrase
+  of a price or a promise is the seller's to stand behind, not ours.
 - **Passwords and OAuth.** Sign-in is an emailed link and nothing else. There
   is no password to leak, reset or rate-limit, and no provider buttons to keep
   working. A product that needs "Sign in with Google" needs another way into
