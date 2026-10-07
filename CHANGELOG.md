@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-07
+
+- Conversation memory: each buyer–product thread is persisted a turn at a time, shown as history on the product page, and fed through agent-runtime's memory with summarisation when it grows past the budget — so "and in euros?" resolves against what it is a follow-up to, and a reader can see what they were told last week without asking again; the question and its answer are one row, because a run that died before its first token left nothing worth remembering, and the tool traffic stays out of it since the trace already has it and `search_docs` can read page nine again more cheaply than every later call can carry it; past 2,000 tokens of history whole turns are dropped from the oldest end and replaced by the questions alone, clipped and capped, folded deterministically out of the rows on every call rather than stored beside them, because a model call to summarise would cost the buyer a message they never asked for and could fail in the middle of the one they did.
+
 ## 2026-10-05
 
 - Hybrid search: Postgres full-text plus pgvector fused with reciprocal rank fusion over title, description and chunks — positions rather than scores, because a `ts_rank` and a cosine similarity share no unit, so a buyer now finds a listing by what is on page nine of its document and not only by what its description claims; the arms stay asymmetric on purpose, full text returning nothing for a query no document contains a word of while the vector arm answers everything with no threshold to refuse with, which is why results that matched no word are labelled as the closest documents rather than left looking like matches; the eval suite gains a search-relevance section scoring each arm and the fusion over twenty queries, and it needs a database because the lexical arm is Postgres itself.
