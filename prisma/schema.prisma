@@ -71,32 +71,57 @@ enum ProductStatus {
 
 /// A digital product: one downloadable file plus the text we indexed from it.
 model Product {
-  id          String         @id @default(cuid())
-  sellerId    String
-  seller      User           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
-  slug        String         @unique
-  title       String
-  description String
-  priceMinor  Int
-  currency    String         @default("usd")
-  status      ProductStatus  @default(DRAFT)
+  id           String               @id @default(cuid())
+  sellerId     String
+  seller       User                 @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  slug         String               @unique
+  title        String
+  description  String
+  /// The language `title` and `description` are written in. Every locale
+  /// without a translation of its own reads the listing in this one.
+  locale       String               @default("en")
+  priceMinor   Int
+  currency     String               @default("usd")
+  status       ProductStatus        @default(DRAFT)
   /// Original file name, for the download.
-  fileName    String?
+  fileName     String?
   /// Where the file lives (local path in dev, object key in prod).
-  fileKey     String?
-  chunks      ProductChunk[]
-  orders      Order[]
-  reviews     Review[]
-  traces      AgentTrace[]
-  views       ProductView[]
-  threads     Thread[]
+  fileKey      String?
+  chunks       ProductChunk[]
+  translations ProductTranslation[]
+  orders       Order[]
+  reviews      Review[]
+  traces       AgentTrace[]
+  views        ProductView[]
+  threads      Thread[]
   /// The durable-workflow run that owns this product's review, if any.
-  reviewRunId String?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  reviewRunId  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   @@index([status])
   @@index([sellerId])
+}
+
+/// One listing's title and description in one locale. Rows exist only for the
+/// locales a seller actually wrote, so a listing with none still reads in every
+/// language — in the one it was written in. There is never a row for the
+/// product's own `locale`: that text is in the product's columns, and a second
+/// copy of it would be one more thing to keep in step.
+///
+/// Both fields are required because a translation is shown whole or not at
+/// all; half of one reads as a broken page rather than a partly translated one.
+model ProductTranslation {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  locale      String
+  title       String
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([productId, locale])
 }
 
 /// One chunk of a product's document, with its embedding. Written and queried
