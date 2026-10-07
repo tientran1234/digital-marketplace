@@ -1,12 +1,21 @@
 "use client";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import type { ThreadTurn } from "@/domain/conversation";
 
 interface Chip { name: string; done: boolean; error?: boolean }
 
-/** Streams the assistant's SSE events: text as it arrives, tool calls as chips. */
-export function AskBox({ productId }: { productId: string }) {
+/**
+ * Streams the assistant's SSE events: text as it arrives, tool calls as chips.
+ *
+ * The thread above the box is what the next question is answered inside, so it
+ * is drawn from the same rows the agent reads — and an exchange finished in
+ * this tab joins it without waiting for a reload.
+ */
+export function AskBox({ productId, history }: { productId: string; history: readonly ThreadTurn[] }) {
   const t = useTranslations("product");
+  const [thread, setThread] = useState<readonly ThreadTurn[]>(history);
+  const [asked, setAsked] = useState("");
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
   const [chips, setChips] = useState<Chip[]>([]);
@@ -14,6 +23,12 @@ export function AskBox({ productId }: { productId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   async function ask() {
+    // The box below holds the answer to the question that earned it, and a new
+    // question displaces that exchange up into the thread rather than erasing
+    // it — so a buyer who asks three things in a row still sees the first two,
+    // and the newest answer is only ever drawn in one place.
+    if (answer.trim()) setThread((turns) => [...turns, { question: asked, answer }]);
+    setAsked(question);
     setBusy(true); setAnswer(""); setChips([]); setError(null);
     try {
       const res = await fetch(`/api/products/${productId}/ask`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question }) });
@@ -47,6 +62,19 @@ export function AskBox({ productId }: { productId: string }) {
     <section>
       <h2>{t("askTitle")}</h2>
       <p className="muted">{t("askHint")}</p>
+      {thread.length > 0 && (
+        <>
+          <p className="muted">{t("threadHint")}</p>
+          <ol className="thread">
+            {thread.map((turn, i) => (
+              <li key={i}>
+                <p className="asked">{turn.question}</p>
+                <div className="reply">{turn.answer}</div>
+              </li>
+            ))}
+          </ol>
+        </>
+      )}
       <form onSubmit={(e) => { e.preventDefault(); void ask(); }}>
         <textarea rows={2} value={question} onChange={(e) => setQuestion(e.target.value)} placeholder={t("askPlaceholder")} required />
         <div className="row" style={{ marginTop: 8 }}><button type="submit" disabled={busy}>{t("ask")}</button></div>

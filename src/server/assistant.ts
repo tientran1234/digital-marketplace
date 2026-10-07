@@ -17,10 +17,12 @@ import { AnthropicProvider } from "agent-runtime/anthropic";
 import type { Product, User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { threadMemory } from "@/domain/conversation";
 import { canUse } from "@/domain/plans";
 import { extractiveBaseline, fakesRequested } from "@/providers/fake";
 import { HashEmbedder, VoyageEmbedder, retrieve, type ChunkSearch, type Embedder } from "@/rag";
 import { entitlementsForUser } from "./billing";
+import { recordTurn, threadFor } from "./conversations";
 import { meter, refundMeter } from "./usage";
 
 export class PrismaTraceExporter implements TraceExporter {
@@ -147,15 +149,29 @@ export async function askAboutProduct({ user, product, question, onEvent }: AskI
     onEvent?.(e);
   };
 
+  // The question is asked inside whatever this buyer has already asked about
+  // this listing, within a token budget — so "and in euros?" has something to
+  // resolve against, and a thread of fifty questions still fits in one call.
+  const memory = threadMemory(await threadFor(user.id, product.id));
+
   try {
-    return await runAgent({
+    const result = await runAgent({
       provider: modelProvider(question),
       ...assistantAgent(product),
       input: question,
+      memory,
       tracer: new Tracer({ exporters: [new PrismaTraceExporter({ userId: user.id, productId: product.id })] }),
       runName: `ask:${product.slug}`,
       onEvent: watch,
     });
+    // An answer is what makes a question worth keeping: a run that produced
+    // none would leave the next window reading a question nobody took. And a
+    // turn that cannot be written must not take down the answer the buyer has
+    // already read, the same way a view counter does not.
+    if (result.text.trim()) {
+      await recordTurn({ userId: user.id, productId: product.id, turn: { question, answer: result.text } }).catch(() => {});
+    }
+    return result;
   } catch (err) {
     if (!delivered) await refundMeter(user.id, "aiMessages");
     throw err;

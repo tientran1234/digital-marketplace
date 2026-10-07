@@ -12,8 +12,8 @@ import { db } from "@/lib/db";
 const repo = fileURLToPath(new URL("..", import.meta.url));
 
 export default async function seed() {
-  // Users and products cascade to sessions, orders, chunks and views; these
-  // three hang off nothing and would survive.
+  // Users and products cascade to sessions, orders, chunks, views and threads;
+  // these three hang off nothing and would survive.
   await db.webhookEvent.deleteMany();
   await db.agentTrace.deleteMany();
   await db.loginToken.deleteMany();

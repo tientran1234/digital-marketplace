@@ -43,4 +43,18 @@ test("the assistant answers out of the product's own document", async ({ page })
     await page.reload();
     await expect(page.getByText("1 of 20 AI messages used this month")).toBeVisible();
   });
+
+  await test.step("the exchange is still there on a cold load, as the thread", async () => {
+    // The turn is written once the run is over, so the browser is told the
+    // answer is finished a moment before the row exists — and a server
+    // component renders what was there when the page was asked for, not what
+    // arrives after.
+    await expect.poll(() => db.threadTurn.count({ where: { thread: { productId: product.id } } })).toBe(1);
+    await page.reload();
+
+    // Nothing the ask box appended to itself survived that reload, so a thread
+    // on the page now is the rows the next question will be answered inside.
+    await expect(page.locator(".thread .asked")).toHaveText(["How many plans should I offer?"]);
+    await expect(page.locator(".thread .reply")).toContainText("[1]");
+  });
 });
