@@ -1,0 +1,39 @@
+# The deployment smoke test: `e2e/preview.spec.ts` against the Vercel preview
+# GitHub was just told about, so a pull request says whether the thing that
+# deployed works and not only whether it built.
+#
+# `deployment_status` is how Vercel reports a finished build, and a workflow on
+# that event always runs from the default branch's copy of this file — so a
+# change to it only takes effect once merged. The deployment needs
+# SEED_ON_BOOT=1 and FAKE_PROVIDERS=1 in its Preview environment; see
+# docs/deploy.md.
+name: Preview e2e
+on:
+  deployment_status:
+jobs:
+  preview:
+    # Production is excluded on purpose rather than by accident: the spec
+    # asserts the demo seed is on the marketplace, which is exactly what a real
+    # deployment does not have.
+    if: github.event.deployment_status.state == 'success' && !contains(github.event.deployment_status.environment, 'Production')
+    runs-on: ubuntu-latest
+    env:
+      E2E_BASE_URL: ${{ github.event.deployment_status.target_url }}
+    steps:
+      # The commit that was deployed, not whatever the default branch is now.
+      - uses: actions/checkout@v4
+        with: { ref: "${{ github.event.deployment.sha }}" }
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      # No build and no database: E2E_BASE_URL takes both off this runner and
+      # puts them on the deployment, which is the point of the spec.
+      - run: pnpm exec playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: preview-traces
+          path: test-results/
+          retention-days: 7

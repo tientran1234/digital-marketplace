@@ -15,8 +15,21 @@ import { defineConfig } from "@playwright/test";
 const port = Number(process.env.E2E_PORT ?? 3100);
 const appUrl = `http://127.0.0.1:${port}`;
 
+/**
+ * Set to point the suite at a deployment instead of a build of its own, which
+ * is what `.github/workflows/preview-e2e.yml` does with a Vercel preview URL.
+ *
+ * Only `preview.spec.ts` runs there. The two flow specs reach into the app's
+ * own process — Prisma against the same database, and the sign-in link read
+ * off the server's log file, which is the only place it exists outside a
+ * mailbox — and neither is on the other side of a URL. What a deployment can
+ * be asked instead is whether it came up: see `e2e/preview.spec.ts`.
+ */
+const previewUrl = process.env.E2E_BASE_URL;
+
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: previewUrl ? ["preview.spec.ts"] : ["ask.spec.ts", "buy.spec.ts"],
   // One database and one seed, so the specs take turns rather than racing for
   // the buyer's quota and the product's order rows.
   workers: 1,
@@ -24,10 +37,11 @@ export default defineConfig({
   forbidOnly: Boolean(process.env.CI),
   reporter: process.env.CI ? [["github"], ["list"]] : [["list"]],
   timeout: 60_000,
-  globalSetup: "./e2e/seed.ts",
-  use: { baseURL: appUrl, trace: "retain-on-failure" },
+  // A deployment seeds itself (`server/bootstrap.ts`); nothing here reseeds it.
+  globalSetup: previewUrl ? undefined : "./e2e/seed.ts",
+  use: { baseURL: previewUrl ?? appUrl, trace: "retain-on-failure" },
   projects: [{ name: "chromium", use: { browserName: "chromium" } }],
-  webServer: {
+  webServer: previewUrl ? undefined : {
     // A production build: `next dev` compiles on first request, which turns
     // every first navigation into a timeout nobody can tell from a bug.
     //
