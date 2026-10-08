@@ -20,4 +20,4 @@ Same rule: one item per change, in order.
 - [x] Hybrid search: Postgres full-text plus pgvector fused with reciprocal rank fusion over title, description and chunks; the eval suite gains a search-relevance section.
 - [x] Conversation memory: persist each buyer–product thread, show history on the product page, feed it through agent-runtime's memory with summarisation when it grows past the budget.
 - [x] Localised listings: title and description per locale (vi/en) with fallback; sellers edit both; the assistant answers in the buyer's locale using the matching text.
-- [ ] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.
+- [x] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.

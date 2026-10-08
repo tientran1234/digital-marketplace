@@ -27,6 +27,10 @@ const SEED_LOCK_KEY = 8_164_201;
  * it is a lock rather than a row: an instance killed mid-seed drops it when
  * its connection goes, where a row would stay behind and no later boot would
  * ever retry.
+ *
+ * It is also why `DATABASE_URL` has to be a direct connection and not a
+ * transaction pooler, which hands the session underneath it to someone else:
+ * see docs/deploy.md.
  */
 export function postgresSeedGate(pg: Pool, prisma: PrismaClient): SeedGate {
   let held: PoolClient | null = null;

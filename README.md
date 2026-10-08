@@ -164,6 +164,13 @@ stayed, so a refunded order stops counting as a sale.
 (daily on Hobby — point cron-job.org at it every few minutes for real use). Signals (`admin approves`) resume runs immediately without
 waiting for the tick.
 
+**First boot.** A deployment with a schema and no rows looks broken rather than
+new, so `SEED_ON_BOOT=1` has the app seed itself from the instrumentation hook
+Next awaits before serving — the first page loaded already has the demo
+products on it. Opt in, only ever into an empty marketplace, and one instance
+at a time behind an advisory lock, because a cold start brings up as many
+instances as it has traffic and they all find the same empty database.
+
 ## Run it
 
 ```bash
@@ -187,7 +194,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 114 unit tests anywhere; 28 flow and search tests need DATABASE_URL
+pnpm test                       # 133 unit tests anywhere; 31 flow, search and first-boot tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -208,6 +215,16 @@ not in pgvector is an answer that did not come from the document. Sign-in is
 the real emailed link, read off the server's log — the only place it exists
 outside a mailbox, since the database keeps its SHA-256.
 
+**Against a deployment.** `E2E_BASE_URL=https://… pnpm exec playwright test`
+runs `e2e/preview.spec.ts` instead, and a `deployment_status` workflow does it
+for every Vercel preview. Those two flow specs cannot go there — they hold a
+Prisma client on the same database and read the sign-in link off the server's
+own log — so what a deployment is asked is what a buyer could ask it: is the
+seed on the marketplace, does the locale prefix route, is the file shut to a
+stranger, is an unsigned delivery refused. It is the one question CI cannot
+answer, because a missing `DATABASE_URL`, a half-configured bucket and an
+unseeded database all build perfectly.
+
 **Evals.** `evals/` asks forty questions of the two seed documents, each one
 naming the passage that answers it and the fact the answer must carry. It runs
 the real chunker, embedder, MMR and agent prompt against an in-memory index, so
@@ -216,6 +233,10 @@ for the real model. The search-relevance section is the exception: the lexical
 arm is Postgres itself, so twenty search queries are scored per arm when
 `DATABASE_URL` is set and skipped when it is not. Numbers and what they mean:
 [`evals/README.md`](evals/README.md).
+
+**Deploying it.** Vercel, Neon, a bucket, the Stripe webhook and the cron tick,
+and what a preview environment needs that production must not have:
+[`docs/deploy.md`](docs/deploy.md).
 
 ## The UI
 
@@ -247,14 +268,15 @@ src/
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract
+  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract · seed (the demo data) · bootstrap + bootstrap-postgres (what a first boot owes an empty marketplace)
   app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, and the flows + search on real Postgres
-e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser
+tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, the first-boot claim, and the flows + search on real Postgres
+e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser · preview (a deployment, over nothing but its URL)
 evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
+docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed edition)
 ```
 
 ## What is deliberately not here
