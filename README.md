@@ -95,6 +95,20 @@ than left looking like matches. The card names the passage it matched on,
 which is the only way a buyer can tell why a listing whose description says
 nothing about dunning came back for "dunning".
 
+Which words the lexical arm matches depends on who is reading. It resolves a
+listing's text the way the card does — the seller's translation for the
+reader's locale, the listing's own words where there is none — so a Vietnamese
+query reaches a title only a `ProductTranslation` row holds, and a translation
+its reader cannot read never pulls a listing into their results. The text
+search configuration follows the language of the words rather than being one
+constant: the reader's for a translation, the listing's own for its fallback
+text and for its document, since that is the language the seller uploaded it
+in. Vietnamese gets `simple` — Postgres ships no configuration for it, and
+`english` would both stem words that do not inflect and swallow `an`, `do` and
+`can` as stop words. The query is built in the same configuration as the text
+it is matched against, which one constant quietly got wrong: the english
+stemmer reads "ngày" as "ngài".
+
 **Read it in your language.** The interface was already in English and
 Vietnamese while every listing in it was in one language, so a buyer on `/vi`
 read Vietnamese chrome around an English card. A listing now carries the
@@ -194,7 +208,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 133 unit tests anywhere; 31 flow, search and first-boot tests need DATABASE_URL
+pnpm test                       # 133 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -281,15 +295,16 @@ docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed 
 
 ## What is deliberately not here
 
-- **Searching a listing in its translation.** The full-text arm indexes the
-  product's own title and description, so a Vietnamese buyer typing Vietnamese
-  words reaches a listing through the document behind it, or through the vector
-  arm, but not through a title only a `ProductTranslation` row holds. Covering
-  the translations means a second `tsvector` per locale and a text search
-  configuration for each — Postgres has no Vietnamese one — and the question of
-  which locale's index a query is even for. The listing reads in the buyer's
-  language either way; finding it by those words is the next piece of work, not
-  a line in this one.
+- **Searching a listing in a language you are not reading it in.** The lexical
+  arm searches one text per listing: the one this reader will be shown. So a
+  buyer on `/en` typing Vietnamese words does not reach a listing through its
+  Vietnamese translation, and a technical term a seller left in English does
+  not reach a buyer on `/vi` through the English title their card has replaced.
+  Searching every locale at once is a wider recall and a worse result: the card
+  comes back in the reader's language, which would leave a hit sharing no word
+  with what they typed — the thing the arms are kept asymmetric to avoid. The
+  document behind the listing is searched whatever language either is in, and
+  the vector arm still answers everything.
 - **Translating a listing the seller did not translate.** A fallback shows the
   words they wrote. Nothing here calls a model to render them into the reader's
   language, because a listing is what is being sold and a machine's paraphrase

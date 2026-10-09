@@ -21,3 +21,4 @@ Same rule: one item per change, in order.
 - [x] Conversation memory: persist each buyer–product thread, show history on the product page, feed it through agent-runtime's memory with summarisation when it grows past the budget.
 - [x] Localised listings: title and description per locale (vi/en) with fallback; sellers edit both; the assistant answers in the buyer's locale using the matching text.
 - [x] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.
+- [x] Searching a listing in its translation: the lexical arm matches the words the reader's locale will show them, with a text search configuration per language.
