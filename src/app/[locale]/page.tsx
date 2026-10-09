@@ -16,7 +16,7 @@ export default async function Home({ params, searchParams }: { params: Promise<{
   const [{ locale }, { q }] = await Promise.all([params, searchParams]);
   const query = (q ?? "").trim();
   const [t, tReviews] = await Promise.all([getTranslations("home"), getTranslations("reviews")]);
-  const { products, matched, nearestOnly } = query ? await search(query) : await published();
+  const { products, matched, nearestOnly } = query ? await search(query, locale) : await published();
   // One grouped query for the whole grid rather than one per card.
   const ratings = await productRatings(products.map((p) => p.id));
   return (
@@ -66,8 +66,10 @@ async function published() {
 }
 
 /** Hybrid search, kept in the order it ranked them, with the passage each listing matched on. */
-async function search(query: string) {
-  const hits = await searchProducts(query);
+async function search(query: string, locale: string) {
+  // The reader's locale goes in so the lexical arm matches the words on the
+  // card below rather than whichever language the seller happened to write in.
+  const hits = await searchProducts(query, { locale });
   const found = await db.product.findMany({ where: { id: { in: hits.map((h) => h.productId) } }, include: withSeller });
   const byId = new Map(found.map((p) => [p.id, p]));
   return {
