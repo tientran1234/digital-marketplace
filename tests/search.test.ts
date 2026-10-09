@@ -119,6 +119,82 @@ describe.skipIf(!hasDb)("hybrid search", () => {
   });
 
   /**
+   * Searching a listing in the language the seller translated it into. The
+   * `simple` configuration stands in for the Vietnamese one Postgres does not
+   * ship; what these pin is that the reader's locale decides whose words the
+   * lexical arm matches, and that it never matches words the reader will not
+   * be shown.
+   */
+  describe("a listing in its translation", () => {
+    const vi = {
+      locale: "vi",
+      title: "Sổ tay định giá SaaS",
+      description: "Cách chọn gói, mức giá và hạn mức — kèm chiết khấu theo năm và cửa sổ hoàn tiền 14 ngày.",
+    };
+    // Only the playbook is translated: the other listing is what a locale the
+    // seller wrote nothing in still has to find.
+    beforeAll(async () => {
+      await db.productTranslation.create({ data: { ...vi, productId: bySlug.get("saas-pricing-playbook")! } });
+    });
+    afterAll(async () => {
+      await db.productTranslation.deleteMany({ where: { productId: bySlug.get("saas-pricing-playbook")! } });
+    });
+
+    it("finds it by words only the translation holds", async () => {
+      const hits = await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)[0]).toBe("saas-pricing-playbook");
+      // The listing's own text is the match, so there is no passage to name.
+      expect(hits[0]!.heading).toBeNull();
+    });
+
+    it("builds the query in the same configuration as the words it searches", async () => {
+      // The english stemmer turns "ngày" into "ngài", a different word
+      // entirely. One configuration for the text and another for the query —
+      // which is what a single hardcoded one amounts to — matches nothing.
+      const hits = await searchProducts("ngày", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)).toEqual(["saas-pricing-playbook"]);
+    });
+
+    it("does not reach it through a translation its reader cannot read", async () => {
+      expect(await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "en" })).toEqual([]);
+    });
+
+    it("searches the listing's own text where that locale has no translation", async () => {
+      const hits = await searchProducts("notion template", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)[0]).toBe("notion-second-brain-template");
+      // No passage: the words were found in the listing itself, which is the
+      // half a reader of an untranslated locale would otherwise lose.
+      expect(hits[0]!.heading).toBeNull();
+    });
+
+    it("still searches the document behind a listing it did translate", async () => {
+      const hits = await searchProducts("dunning expired cards", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)[0]).toBe("saas-pricing-playbook");
+      expect(hits[0]!.heading).toBe("Churn and downgrades");
+    });
+
+    it("stems a document in the language it was written in, not the reader's", async () => {
+      // An English document gets the english stemmer — "archiving" reaching
+      // "Archive rules" — for a reader of any language, because the language
+      // the seller uploaded it in is the only one it is written in.
+      const hits = await searchProducts("archiving rules", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)[0]).toBe("notion-second-brain-template");
+      expect(hits[0]!.heading).toBe("Archive rules");
+    });
+
+    it("keeps a listing in a language it has no configuration for searchable", async () => {
+      const productId = bySlug.get("notion-second-brain-template")!;
+      await db.product.update({ where: { id: productId }, data: { locale: "de" } });
+      try {
+        const hits = await searchProducts("notion template", { embedder, arms: ["text"], locale: "de" });
+        expect(hits.map((h) => h.productId)).toContain(productId);
+      } finally {
+        await db.product.update({ where: { id: productId }, data: { locale: "en" } });
+      }
+    });
+  });
+
+  /**
    * The floors for the search-relevance section of evals/README.md. Measured
    * 95% / 94.1% on the hash embedder, which leaves room for one more miss and
    * none for an arm that went dark.

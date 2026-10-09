@@ -41,6 +41,14 @@ export interface SearchOptions {
   embedder?: Embedder;
   /** Which arms to run. Both by default; the eval suite scores each alone to show what fusing them buys. */
   arms?: readonly SearchArm[];
+  /**
+   * The language the buyer is reading the marketplace in, which decides whose
+   * words the lexical arm matches: the seller's translation for this locale
+   * where there is one, the listing's own text where there is not. A locale
+   * nothing is translated into searches the listings' own text, which is what
+   * every locale did before any of them had a translation.
+   */
+  locale?: string;
 }
 
 interface ArmHit {
