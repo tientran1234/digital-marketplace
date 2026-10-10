@@ -22,3 +22,4 @@ Same rule: one item per change, in order.
 - [x] Localised listings: title and description per locale (vi/en) with fallback; sellers edit both; the assistant answers in the buyer's locale using the matching text.
 - [x] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.
 - [x] Searching a listing in its translation: the lexical arm matches the words the reader's locale will show them, with a text search configuration per language.
+- [x] Sign in with Google: an OAuth 2.0 authorization-code flow with PKCE that lands in the existing `issueSession`, refusing an address the provider has not verified; the emailed link and the sessions table stay as they are.

@@ -43,6 +43,26 @@ type an address. It is created as a BUYER: a link proves an address, it does
 not hand out a role. What comes out is the same opaque session row in the same
 table as before.
 
+**Sign in with Google.** Optional, and absent until `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` are both set — one of the two is an error rather than a
+button that takes a buyer to Google and fails on the way back. `GET
+/api/auth/oauth/start` mints a random state and a PKCE verifier, seals both
+into a ten-minute httpOnly cookie signed with `SESSION_SECRET`, and sends the
+browser to Google with nothing but the verifier's SHA-256. The flow waits in a
+cookie rather than a table because what it has to prove is that the request
+coming back is from the browser that left, and it is signed because an
+unsigned state cookie can be planted by anything able to write a cookie on
+this domain — and a planted state matches a planted query string. `GET
+/api/auth/oauth/callback` exchanges nothing until that state has matched: the
+code is a credential the provider spends once, and spending it for a callback
+we cannot tie to a flow of ours is signing in whoever assembled the URL. The
+profile comes from the userinfo endpoint rather than the `id_token`, and an
+address Google has not verified is refused — both doors end at one `user` row
+keyed by email, so an unverified address would be a way into whatever that
+address already owns here. What comes out is the same `issueSession`: the role
+is whatever the account already has, and the name a seller trades under is not
+the provider's to overwrite on every sign-in.
+
 **Buy.** `POST /api/checkout/order` persists a `PENDING` order *before*
 calling Stripe, so a webhook that beats the response still finds it. Stripe's
 `checkout.session.completed` arrives at `POST /api/webhooks/stripe`: raw body
@@ -201,14 +221,17 @@ bag-of-words hasher stands in — fine for a demo, useless for real search),
 `STRIPE_*` turns on real checkout (`pnpm stripe:listen` for the webhook), and
 `S3_*` moves product files off the local disk into a bucket, and
 `RESEND_API_KEY` + `MAIL_FROM` send sign-in links as real email instead of
-printing them. Setting some but not all of the `S3_*` variables — or one of
-the two mail variables — is an error rather than a fallback.
+printing them, and `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` put a "Continue
+with Google" button on the sign-in page (register
+`<APP_URL>/api/auth/oauth/callback` with Google). Setting some but not all of
+the `S3_*` variables — or one of the two mail variables, or one of the two
+Google ones — is an error rather than a fallback.
 
 Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 133 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
+pnpm test                       # 155 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -278,15 +301,15 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, the assistant's conversation window, which words a listing shows which reader
-  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · fake.ts (the billing double, the extractive model, and the flag that serves them)
+  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, what a provider sign-in has to prove, which words a listing shows which reader
+  providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · google.ts (the only file knowing Google's endpoints) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · mail · usage · analytics · license · storage · extract · seed (the demo data) · bootstrap + bootstrap-postgres (what a first boot owes an empty marketplace)
-  app/api/       auth (request-link/callback/logout), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
+  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · oauth (the signed flow cookie, and the provider seam) · mail · usage · analytics · license · storage · extract · seed (the demo data) · bootstrap + bootstrap-postgres (what a first boot owes an empty marketplace)
+  app/api/       auth (request-link/callback/logout, oauth/start + oauth/callback), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, stripe mapping, evals, the fake-provider seam, the first-boot claim, and the flows + search on real Postgres
+tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, the provider flow (PKCE, the sealed cookie, the address check), stripe mapping, evals, the fake-provider seam, the first-boot claim, and the flows + search on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser · preview (a deployment, over nothing but its URL)
 evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
@@ -309,7 +332,7 @@ docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed 
   words they wrote. Nothing here calls a model to render them into the reader's
   language, because a listing is what is being sold and a machine's paraphrase
   of a price or a promise is the seller's to stand behind, not ours.
-- **Passwords and OAuth.** Sign-in is an emailed link and nothing else. There
-  is no password to leak, reset or rate-limit, and no provider buttons to keep
-  working. A product that needs "Sign in with Google" needs another way into
-  `issueSession`, not another session layer.
+- **Passwords.** Sign-in is an emailed link, or Google where it is configured,
+  and nothing else. There is no password to leak, reset or rate-limit. A
+  product that needs a third door needs another way into `issueSession`, as
+  Google is, not another session layer.
