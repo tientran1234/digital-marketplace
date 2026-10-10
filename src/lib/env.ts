@@ -17,6 +17,8 @@ const schema = z.object({
   S3_SECRET_ACCESS_KEY: z.string().optional(),
   RESEND_API_KEY: z.string().optional(),
   MAIL_FROM: z.string().optional(),
+  GOOGLE_CLIENT_ID: z.string().optional(),
+  GOOGLE_CLIENT_SECRET: z.string().optional(),
   LICENSE_TOKEN: z.string().optional(),
   LICENSE_PUBLIC_KEY: z.string().optional(),
   WORKFLOW_TICK_SECRET: z.string().optional(),

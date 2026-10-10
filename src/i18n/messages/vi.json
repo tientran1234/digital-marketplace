@@ -107,6 +107,10 @@
     "sent": "Kiểm tra email của bạn",
     "sentHint": "Nếu {email} có tài khoản ở đây, liên kết đăng nhập đang được gửi tới. Liên kết dùng được một lần, trong 15 phút.",
     "linkError": "Liên kết đã được dùng hoặc đã hết hạn. Hãy yêu cầu một liên kết mới.",
+    "or": "hoặc",
+    "google": "Tiếp tục với Google",
+    "oauthError": "Lần đăng nhập đó chưa hoàn tất. Hãy thử lại, hoặc yêu cầu một liên kết email.",
+    "oauthUnverified": "Google chưa xác minh địa chỉ email của tài khoản đó. Hãy xác minh ở Google, hoặc đăng nhập bằng liên kết email.",
     "mail": {
       "subject": "Liên kết đăng nhập của bạn",
       "body": "Đăng nhập vào marketplace:\n\n{link}\n\nLiên kết dùng được một lần, trong 15 phút. Nếu bạn không yêu cầu thì không có gì xảy ra — hãy bỏ qua email này."

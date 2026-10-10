@@ -107,6 +107,10 @@
     "sent": "Check your email",
     "sentHint": "If {email} has an account here, a sign-in link is on its way. It works once, and for 15 minutes.",
     "linkError": "That link has already been used or has expired. Ask for a new one.",
+    "or": "or",
+    "google": "Continue with Google",
+    "oauthError": "That sign-in did not finish. Try again, or ask for an email link.",
+    "oauthUnverified": "Google has not verified that account's email address. Verify it there, or sign in with an email link instead.",
     "mail": {
       "subject": "Your sign-in link",
       "body": "Sign in to the marketplace:\n\n{link}\n\nThe link works once, and for 15 minutes. If you did not ask for it, nothing has happened — ignore this email."
