@@ -1,6 +1,15 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import type { User } from "@prisma/client";
-import { FLOW_TTL_MS, acceptProfile, flowStatus, stateMatches, type Flow, type ProviderProfile } from "@/domain/oauth";
+import {
+  FLOW_TTL_MS,
+  acceptProfile,
+  flowStatus,
+  isProviderName,
+  stateMatches,
+  type Flow,
+  type ProviderName,
+  type ProviderProfile,
+} from "@/domain/oauth";
 import { googleOAuth } from "@/providers/google";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -8,9 +17,9 @@ import { defaultLocale, isLocale, type Locale } from "@/i18n";
 
 export const FLOW_COOKIE = "dm_oauth";
 
-/** One provider today. The seam is here so a second one is a file in `providers/` rather than a change to the two routes. */
+/** A door, named by the one value a flow cookie carries about it. What configures each one is `selectOAuthProvider` below; the two routes know none of them. */
 export type OAuthProvider = {
-  readonly name: "google";
+  readonly name: ProviderName;
   authorizeUrl(params: { state: string; challenge: string }): string;
   profile(code: string, verifier: string): Promise<ProviderProfile>;
 };
@@ -92,6 +101,12 @@ export function unsealFlow(value: string | undefined, secret: string, now = new 
   // Signed by us and still checked: a cookie from an older format signs just
   // as well as a current one, and the callback has to be able to say no to it.
   if (typeof flow?.state !== "string" || typeof flow?.verifier !== "string" || typeof flow?.expiresAt !== "number") return null;
+  // A name no door answers to is refused rather than read as the first door,
+  // which includes a cookie sealed before there was more than one: ten minutes
+  // of flows end at the deploy that adds a provider, and the buyer holding one
+  // presses the button again. Guessing here would be the callback choosing the
+  // provider after all.
+  if (!isProviderName(flow.provider)) return null;
   return flowStatus(flow, now) === "valid" ? flow : null;
 }
 
@@ -117,7 +132,7 @@ export type StartedFlow = { url: string; cookie: FlowCookie };
 export function startFlow(provider: OAuthProvider, locale: Locale, secret: string, now = new Date()): StartedFlow {
   const state = randomBytes(32).toString("base64url");
   const { verifier, challenge } = pkce();
-  const flow: Flow = { state, verifier, locale, expiresAt: now.getTime() + FLOW_TTL_MS };
+  const flow: Flow = { state, verifier, locale, provider: provider.name, expiresAt: now.getTime() + FLOW_TTL_MS };
   return {
     url: provider.authorizeUrl({ state, challenge }),
     cookie: {

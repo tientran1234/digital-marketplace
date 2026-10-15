@@ -6,10 +6,33 @@
  * browser coming back is the one that left, and what the provider has to have
  * proved about an address before it is allowed to be an account here — are
  * decided here and read by `server/oauth.ts`.
+ *
+ * Which provider a flow left by is the fourth, and lives here for the same
+ * reason: one callback URL is registered for all of them, so the only record
+ * of which provider issued the code coming back is the flow that started.
  */
 
 /** Long enough to sign in at the provider and pick an account, short enough that a tab left open overnight is not a spare flow. */
 export const FLOW_TTL_MS = 10 * 60_000;
+
+/**
+ * The doors this application has, in the order the sign-in page offers them.
+ * A name, and not a URL or a client id: what each one is configured from is
+ * `server/oauth.ts`'s business, and what rides in a cookie has to be a value
+ * that means nothing on its own.
+ */
+export const PROVIDER_NAMES = ["google", "oidc"] as const;
+export type ProviderName = (typeof PROVIDER_NAMES)[number];
+
+/**
+ * A name is checked against the doors that exist wherever one arrives from
+ * outside — the start route's query, a callback's cookie — because a provider
+ * is picked by the name and an unchecked one would pick nothing twice over:
+ * no door to send a buyer to, and no exchange to refuse on the way back.
+ */
+export function isProviderName(value: unknown): value is ProviderName {
+  return typeof value === "string" && (PROVIDER_NAMES as readonly string[]).includes(value);
+}
 
 /** What the start of a flow has to remember until the callback arrives. */
 export type Flow = {
@@ -19,6 +42,12 @@ export type Flow = {
   verifier: string;
   /** Where the callback lands — read from the flow rather than the request, so a crafted callback cannot aim it. */
   locale: string;
+  /**
+   * Which door this flow left by. Read from the flow for the same reason the
+   * locale is: a name off the callback's query would be whoever assembled the
+   * URL choosing which provider's token endpoint we offer a code to.
+   */
+  provider: ProviderName;
   expiresAt: number;
 };
 

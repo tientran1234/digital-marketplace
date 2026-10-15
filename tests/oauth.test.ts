@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLOW_TTL_MS, acceptProfile, displayName, flowStatus, stateMatches } from "@/domain/oauth";
+import { FLOW_TTL_MS, PROVIDER_NAMES, acceptProfile, displayName, flowStatus, isProviderName, stateMatches } from "@/domain/oauth";
 import { callbackUrl, completeFlow, pkce, sealFlow, selectOAuthProvider, startFlow, unsealFlow } from "@/server/oauth";
 import { googleOAuth } from "@/providers/google";
 
@@ -15,6 +15,15 @@ describe("the rules of a provider sign-in", () => {
     expect(flowStatus({ expiresAt }, at(expiresAt - 1))).toBe("valid");
     expect(flowStatus({ expiresAt }, at(expiresAt))).toBe("expired");
     expect(flowStatus({ expiresAt }, at(expiresAt + 1))).toBe("expired");
+  });
+
+  it("knows the doors it has and nothing else", () => {
+    for (const name of PROVIDER_NAMES) expect(isProviderName(name)).toBe(true);
+    // What arrives in a query or a cookie: anything at all, and a provider is
+    // picked by it.
+    for (const junk of ["", "Google", "okta", "__proto__", undefined, null, 1, {}]) {
+      expect(isProviderName(junk), String(junk)).toBe(false);
+    }
   });
 
   it("matches a state against itself and nothing against an empty one", () => {
@@ -142,7 +151,7 @@ describe("choosing a provider", () => {
 
 describe("the flow cookie", () => {
   const secret = "secret-at-least-16-bytes";
-  const flow = { state: "st_1", verifier: "ver_1", locale: "vi", expiresAt: 2_000_000 };
+  const flow = { state: "st_1", verifier: "ver_1", locale: "vi", provider: "google" as const, expiresAt: 2_000_000 };
   const before = at(flow.expiresAt - 1);
 
   it("comes back as it went in", () => {
@@ -160,6 +169,20 @@ describe("the flow cookie", () => {
 
     const forged = Buffer.from(JSON.stringify({ ...flow, state: "st_2" })).toString("base64url");
     expect(unsealFlow(`${forged}.${mac}`, secret, before)).toBeNull();
+  });
+
+  /** One callback URL serves every door, so the cookie is the only thing that says which one this code came from. */
+  it("names the door the flow left by", () => {
+    const provider = { name: "oidc" as const, authorizeUrl: () => "https://idp.test/authorize", profile: async () => verified };
+    const started = startFlow(provider, "en", secret, at(1_000_000));
+    expect(unsealFlow(started.cookie.value, secret, at(1_000_000))?.provider).toBe("oidc");
+  });
+
+  /** Sealed with our own secret and still refused: a cookie from before there was a second door names no door at all. */
+  it("refuses one of its own that names a door this application does not have", () => {
+    for (const named of [{ ...flow, provider: "okta" }, { ...flow, provider: undefined }]) {
+      expect(unsealFlow(sealFlow(named as never, secret), secret, before), String(named.provider)).toBeNull();
+    }
   });
 
   it("refuses one of its own once the flow has run out", () => {
@@ -185,7 +208,7 @@ describe("the flow cookie", () => {
 describe("finishing a flow", () => {
   const secret = "secret-at-least-16-bytes";
   const now = at(1_000_000);
-  const flow = { state: "st_1", verifier: "ver_1", locale: "vi", expiresAt: now.getTime() + FLOW_TTL_MS };
+  const flow = { state: "st_1", verifier: "ver_1", locale: "vi", provider: "google" as const, expiresAt: now.getTime() + FLOW_TTL_MS };
   const sealed = sealFlow(flow, secret);
 
   /** A provider that is called is a code that is spent; these refusals have to come first. */
