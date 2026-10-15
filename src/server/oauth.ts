@@ -11,6 +11,7 @@ import {
   type ProviderProfile,
 } from "@/domain/oauth";
 import { googleOAuth } from "@/providers/google";
+import { oidcOAuth } from "@/providers/oidc";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { defaultLocale, isLocale, type Locale } from "@/i18n";
@@ -24,46 +25,99 @@ export type OAuthProvider = {
   profile(code: string, verifier: string): Promise<ProviderProfile>;
 };
 
-/** The settings that decide whether the button exists, kept narrow so the choice can be exercised without a whole environment. */
-export type OAuthEnv = { APP_URL: string } & Partial<Record<"GOOGLE_CLIENT_ID" | "GOOGLE_CLIENT_SECRET", string>>;
+/** The settings that decide which buttons exist, kept narrow so the choice can be exercised without a whole environment. */
+export type OAuthEnv = { APP_URL: string } &
+  Partial<
+    Record<
+      | "GOOGLE_CLIENT_ID"
+      | "GOOGLE_CLIENT_SECRET"
+      | "OIDC_CLIENT_ID"
+      | "OIDC_CLIENT_SECRET"
+      | "OIDC_AUTHORIZE_URL"
+      | "OIDC_TOKEN_URL"
+      | "OIDC_USERINFO_URL",
+      string
+    >
+  >;
 
-/** Registered with the provider, so it is derived from `APP_URL` rather than read off the request that wants it. */
+/** One URL registered with every provider, so it is derived from `APP_URL` rather than read off the request that wants it — and which provider a callback belongs to comes off the flow cookie instead. */
 export function callbackUrl(appUrl: string): string {
   return new URL("/api/auth/oauth/callback", appUrl).toString();
 }
+
+/**
+ * What each door needs set before it exists, in the order the sign-in page
+ * offers them. A table rather than a branch per provider, because the rule
+ * below is the same rule for all of them and a second copy of it is a second
+ * chance to let a half-configured one through.
+ */
+const DOORS: {
+  readonly name: ProviderName;
+  readonly required: readonly (keyof OAuthEnv)[];
+  readonly build: (e: OAuthEnv, redirectUri: string) => Omit<OAuthProvider, "name">;
+}[] = [
+  {
+    name: "google",
+    required: ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+    build: (e, redirectUri) =>
+      googleOAuth({ clientId: e.GOOGLE_CLIENT_ID!, clientSecret: e.GOOGLE_CLIENT_SECRET!, redirectUri }),
+  },
+  {
+    name: "oidc",
+    required: ["OIDC_CLIENT_ID", "OIDC_CLIENT_SECRET", "OIDC_AUTHORIZE_URL", "OIDC_TOKEN_URL", "OIDC_USERINFO_URL"],
+    build: (e, redirectUri) =>
+      oidcOAuth({
+        clientId: e.OIDC_CLIENT_ID!,
+        clientSecret: e.OIDC_CLIENT_SECRET!,
+        authorizeUrl: e.OIDC_AUTHORIZE_URL!,
+        tokenUrl: e.OIDC_TOKEN_URL!,
+        userinfoUrl: e.OIDC_USERINFO_URL!,
+        redirectUri,
+      }),
+  },
+];
 
 /**
  * Nothing configured means no button, which is the dev default: an emailed
  * link signs in with no provider account at all. Half-configured is an error
  * rather than a quiet no, for the same reason half-configured mail is — the
  * fallback there looks like a sign-in page whose links reach a log, and here
- * it looks like a button that takes a buyer to Google and fails on the way
+ * it looks like a button that takes a buyer to a provider and fails on the way
  * back, where the only thing to read is a redirect to `/login`.
+ *
+ * One door half-configured stops the others too, which is the point: it is a
+ * deployment that is not what it was meant to be, and a sign-in page quietly
+ * missing the button the operator just configured is the hardest version of
+ * this to notice.
  */
-export function selectOAuthProvider(e: OAuthEnv): OAuthProvider | null {
-  const required = ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"] as const;
-  const missing = required.filter((name) => !e[name]);
-  if (missing.length === required.length) return null;
-  if (missing.length) throw new Error(`google sign-in is half-configured: ${missing.join(", ")} missing`);
-  return {
-    name: "google",
-    ...googleOAuth({ clientId: e.GOOGLE_CLIENT_ID!, clientSecret: e.GOOGLE_CLIENT_SECRET!, redirectUri: callbackUrl(e.APP_URL) }),
-  };
+export function selectOAuthProviders(e: OAuthEnv): OAuthProvider[] {
+  const redirectUri = callbackUrl(e.APP_URL);
+  return DOORS.flatMap((door) => {
+    const missing = door.required.filter((name) => !e[name]);
+    if (missing.length === door.required.length) return [];
+    if (missing.length) throw new Error(`${door.name} sign-in is half-configured: ${missing.join(", ")} missing`);
+    return [{ name: door.name, ...door.build(e, redirectUri) }];
+  });
 }
 
-let override: OAuthProvider | null = null;
-let cached: { provider: OAuthProvider | null } | null = null;
+let override: OAuthProvider[] | null = null;
+let cached: { providers: OAuthProvider[] } | null = null;
 
-/** Tests inject a provider here. */
-export function setOAuthProviderForTests(p: OAuthProvider | null) {
+/** Tests inject doors here. `[]` is a marketplace with none, which is not the same as not having chosen yet. */
+export function setOAuthProvidersForTests(p: OAuthProvider[] | null) {
   override = p;
   cached = null;
 }
 
-export function oauthProvider(): OAuthProvider | null {
+export function oauthProviders(): OAuthProvider[] {
   if (override) return override;
-  if (!cached) cached = { provider: selectOAuthProvider(env()) };
-  return cached.provider;
+  if (!cached) cached = { providers: selectOAuthProviders(env()) };
+  return cached.providers;
+}
+
+/** The door a name belongs to, or null — which is also the answer for a name that was configured when the flow started and is not now. */
+export function oauthProvider(name: ProviderName): OAuthProvider | null {
+  return oauthProviders().find((provider) => provider.name === name) ?? null;
 }
 
 /** PKCE: the provider is handed the hash and the secret stays in the flow cookie, so a `code` lifted off the callback URL cannot be exchanged by whoever lifted it. */
@@ -150,12 +204,16 @@ export type Callback = { code: string; state: string; error?: string };
 
 export type OAuthResult =
   | { ok: true; user: User; locale: Locale }
-  | { ok: false; reason: "denied" | "state" | "unverified" | "no_email" };
+  /** `provider` is null until the cookie has been opened: before that there is no door to name, and the sign-in page's message for an unverified address names one. */
+  | { ok: false; reason: "denied" | "state" | "unverified" | "no_email"; provider: ProviderName | null };
+
+/** How `completeFlow` reaches the door the cookie names. A function, so a test finishes a flow without an environment and the routes pass `oauthProvider`. */
+export type ProviderLookup = (name: ProviderName) => OAuthProvider | null;
 
 /**
  * The account is created here rather than when the flow started, the same as a
  * sign-in link's: until the callback comes back all we know is that a browser
- * asked to be sent to Google, and a row written then lets a stranger fill the
+ * asked to be sent to a provider, and a row written then lets a stranger fill the
  * user table with addresses they do not control.
  *
  * Nothing is exchanged until the state has matched. The code is a credential
@@ -163,7 +221,7 @@ export type OAuthResult =
  * to a flow of ours is signing in whoever assembled the URL.
  */
 export async function completeFlow(
-  provider: OAuthProvider,
+  lookup: ProviderLookup,
   callback: Callback,
   sealed: string | undefined,
   secret: string,
@@ -171,13 +229,23 @@ export async function completeFlow(
 ): Promise<OAuthResult> {
   // The provider says `access_denied` when someone presses cancel, which is
   // not a failure to report as one.
-  if (callback.error) return { ok: false, reason: "denied" };
+  if (callback.error) return { ok: false, reason: "denied", provider: null };
 
   const flow = unsealFlow(sealed, secret, now);
-  if (!flow || !stateMatches(flow.state, callback.state) || !callback.code) return { ok: false, reason: "state" };
+  if (!flow || !stateMatches(flow.state, callback.state) || !callback.code) {
+    return { ok: false, reason: "state", provider: null };
+  }
+
+  // Which door this is comes off the cookie, and the door itself is looked up
+  // now rather than carried from the start: one taken out of the environment
+  // between the two halves of a flow is a flow that cannot be finished, and
+  // that is the same answer as a callback we cannot tie to a flow — nothing is
+  // exchanged either way.
+  const provider = lookup(flow.provider);
+  if (!provider) return { ok: false, reason: "state", provider: flow.provider };
 
   const check = acceptProfile(await provider.profile(callback.code, flow.verifier));
-  if (!check.ok) return { ok: false, reason: check.reason };
+  if (!check.ok) return { ok: false, reason: check.reason, provider: provider.name };
 
   const user = await db.user.upsert({
     where: { email: check.email },
@@ -186,7 +254,7 @@ export async function completeFlow(
   });
   // A provider cannot grant a role, and cannot rename an account either: the
   // role is whatever the account already has, a new one is a BUYER by the
-  // schema's default, and the name a seller trades under is not Google's to
-  // overwrite on every sign-in.
+  // schema's default, and the name a seller trades under is not a provider's
+  // to overwrite on every sign-in.
   return { ok: true, user, locale: isLocale(flow.locale) ? flow.locale : defaultLocale };
 }

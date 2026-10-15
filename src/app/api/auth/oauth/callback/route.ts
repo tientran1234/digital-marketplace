@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { issueSession } from "@/server/auth";
-import { FLOW_COOKIE, completeFlow, oauthProvider } from "@/server/oauth";
+import { FLOW_COOKIE, completeFlow, oauthProvider, oauthProviders } from "@/server/oauth";
 import { env } from "@/lib/env";
 
 export const runtime = "nodejs";
@@ -17,12 +17,14 @@ export const runtime = "nodejs";
  * start again.
  */
 export async function GET(request: Request) {
-  const provider = oauthProvider();
-  if (!provider) return new Response(null, { status: 404 });
+  if (oauthProviders().length === 0) return new Response(null, { status: 404 });
 
   const query = new URL(request.url).searchParams;
+  // One URL for every door, so which provider this code belongs to is a
+  // question only the flow cookie answers — `completeFlow` opens it and looks
+  // the door up through this.
   const result = await completeFlow(
-    provider,
+    oauthProvider,
     { code: query.get("code") ?? "", state: query.get("state") ?? "", error: query.get("error") ?? undefined },
     (await cookies()).get(FLOW_COOKIE)?.value,
     env().SESSION_SECRET,
@@ -33,8 +35,13 @@ export async function GET(request: Request) {
     // only one a buyer cannot fix by pressing the button again, and saying so
     // lists nobody, unlike the sign-in link's single message.
     const error = result.reason === "unverified" ? "oauth_unverified" : "oauth";
+    // The door rides along because the message for an unverified address names
+    // it, and it is a name off a cookie we signed rather than anything a
+    // crafted callback could put there. A name reaching the page is still
+    // checked against the doors that exist, the same as everywhere else.
+    const said = new URLSearchParams({ error, ...(result.provider ? { provider: result.provider } : {}) });
     // Unprefixed, so next-intl's middleware picks the language of whoever clicked.
-    const failed = NextResponse.redirect(new URL(`/login?error=${error}`, env().APP_URL), 303);
+    const failed = NextResponse.redirect(new URL(`/login?${said}`, env().APP_URL), 303);
     failed.cookies.delete(FLOW_COOKIE);
     return failed;
   }
