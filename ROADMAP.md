@@ -23,3 +23,4 @@ Same rule: one item per change, in order.
 - [x] Deploy recipe: Vercel + Neon + Blob documented in `docs/deploy.md`, seed on first boot, and a GitHub Action running the Playwright suite against a preview deployment.
 - [x] Searching a listing in its translation: the lexical arm matches the words the reader's locale will show them, with a text search configuration per language.
 - [x] Sign in with Google: an OAuth 2.0 authorization-code flow with PKCE that lands in the existing `issueSession`, refusing an address the provider has not verified; the emailed link and the sessions table stay as they are.
+- [x] A second door into `issueSession`: an operator's own OpenID Connect provider — endpoints and credentials from the environment, the one file that knows them in `providers/`, and the provider's name sealed into the flow cookie so one callback URL serves them all.

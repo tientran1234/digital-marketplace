@@ -63,6 +63,27 @@ address already owns here. What comes out is the same `issueSession`: the role
 is whatever the account already has, and the name a seller trades under is not
 the provider's to overwrite on every sign-in.
 
+**Sign in with your own provider.** The same two routes serve a second door —
+an OpenID Connect provider of the operator's: Entra, Okta, Auth0, Keycloak,
+GitLab. It is five variables (`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` and the
+authorize, token and userinfo endpoints), set beside Google's or instead of
+them, and `providers/oidc.ts` is the only file that knows them. The endpoints
+are pasted rather than read from `<issuer>/.well-known/openid-configuration`,
+because discovery is a request whose answer decides where a sign-in goes and
+it would be made while a buyer waits on the redirect; three URLs set once
+cannot be wrong at the moment the button is pressed, and the start route stays
+a redirect with no network in it. The provider has to assert `email_verified`:
+the address check is the whole of what stands between a provider's say-so and
+an account here, so one that will not say is refused like any other unverified
+address, and that is the thing to check before configuring a door. One
+callback URL is registered for every door, which makes the flow cookie the
+only record of which provider issued the code coming back — so the provider's
+name is sealed into it beside the locale, and a name off the callback's query
+would be whoever assembled the URL choosing whose token endpoint we offer a
+code to. A door half configured is an error for all of them, because a
+sign-in page quietly missing the button an operator just set up is the hardest
+version of this to notice.
+
 **Buy.** `POST /api/checkout/order` persists a `PENDING` order *before*
 calling Stripe, so a webhook that beats the response still finds it. Stripe's
 `checkout.session.completed` arrives at `POST /api/webhooks/stripe`: raw body
@@ -223,15 +244,17 @@ bag-of-words hasher stands in — fine for a demo, useless for real search),
 `RESEND_API_KEY` + `MAIL_FROM` send sign-in links as real email instead of
 printing them, and `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` put a "Continue
 with Google" button on the sign-in page (register
-`<APP_URL>/api/auth/oauth/callback` with Google). Setting some but not all of
-the `S3_*` variables — or one of the two mail variables, or one of the two
-Google ones — is an error rather than a fallback.
+`<APP_URL>/api/auth/oauth/callback` with Google). The five `OIDC_*` variables
+put a second button there for your own OpenID provider, registered at the same
+callback URL. Setting some but not all of the `S3_*` variables — or one of the
+two mail variables, or some of either sign-in door's — is an error rather than
+a fallback.
 
 Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 155 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
+pnpm test                       # 167 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -332,7 +355,19 @@ docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed 
   words they wrote. Nothing here calls a model to render them into the reader's
   language, because a listing is what is being sold and a machine's paraphrase
   of a price or a promise is the seller's to stand behind, not ours.
-- **Passwords.** Sign-in is an emailed link, or Google where it is configured,
-  and nothing else. There is no password to leak, reset or rate-limit. A
-  product that needs a third door needs another way into `issueSession`, as
-  Google is, not another session layer.
+- **Passwords.** Sign-in is an emailed link, or a provider where one is
+  configured, and nothing else. There is no password to leak, reset or
+  rate-limit. A product that needs a further door configures one — the OpenID
+  door takes any provider's three endpoints — rather than writing a session
+  layer beside this one, and what it would have to be is another way into
+  `issueSession`, as both of these are.
+- **An identity provider that will not say an address is verified, and
+  anything else it knows.** A door is `email_verified` and nothing more. A
+  provider that does not assert it cannot be one, however the operator
+  configures it, because every door ends at one `user` row keyed by email —
+  and a provider's groups, its roles and its directory are not read at
+  all: a role here is granted here, and a sign-in that could promote an
+  account would make whoever administers the provider an admin of this
+  marketplace. Nor is an account tied to the provider id behind it, so the
+  same address through either door is the same seller, and a buyer who
+  switches keeps what they bought.
