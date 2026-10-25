@@ -19,6 +19,7 @@ import { sellerPayoutStatus, startPayoutOnboarding } from "@/server/payouts";
 import { moderateReview, pendingReviews, productRating, publishedReviews, reviewEligibilityFor, submitReview } from "@/server/reviews";
 import { NO_RATINGS } from "@/domain/review";
 import { askAboutProduct, setEmbedderForTests, setModelProviderForTests } from "@/server/assistant";
+import { DraftError, draftTranslation, setDraftProviderForTests } from "@/server/translate";
 import { recordTurn, threadFor } from "@/server/conversations";
 import { currentPeriod } from "@/server/usage";
 import { issueSession } from "@/server/auth";
@@ -240,6 +241,32 @@ describe.skipIf(!hasDb)("marketplace flows", () => {
     expect(trace).toMatchObject({ modelCalls: 2, toolCalls: 1, status: "ok" });
     expect(trace.costUsd).toBeGreaterThan(0);
     expect((await entitlementsForUser(buyerId)).planKey).toBe("free");
+  });
+
+  it("draft: counted like a question, refunded when none came back, and never a row of its own", async () => {
+    const seller = await db.user.findUniqueOrThrow({ where: { id: sellerId } });
+    const source = { title: "Guide", description: "A guide about refunds and pricing" };
+    const drafted = { title: "Hướng dẫn", description: "Một hướng dẫn về hoàn tiền và định giá." };
+    const used = async () =>
+      (await db.usageCounter.findUnique({ where: { userId_feature_period: { userId: sellerId, feature: "aiMessages", period: currentPeriod() } } }))?.used ?? 0;
+
+    setDraftProviderForTests(new FakeProvider([reply(JSON.stringify(drafted))], "claude-opus-5"));
+    await expect(draftTranslation(seller, { source, from: "en", to: "vi" })).resolves.toEqual(drafted);
+    expect(await used()).toBe(1);
+    // The same table a buyer's question lands in: what the model cost this
+    // account is one answer, whichever screen spent it.
+    expect(await db.agentTrace.findFirstOrThrow({ where: { userId: sellerId } })).toMatchObject({ modelCalls: 1, productId: null });
+
+    // A draft nobody can use delivered nothing, so it is given back: the
+    // seller types the field they were going to type anyway.
+    setDraftProviderForTests(new FakeProvider([reply("Sure! Here is the translation.")], "claude-opus-5"));
+    await expect(draftTranslation(seller, { source, from: "en", to: "vi" })).rejects.toThrow(DraftError);
+    expect(await used()).toBe(1);
+
+    // The thing a draft is not: a translation. These words reach a buyer when
+    // the seller submits the form they landed in, and not before.
+    expect(await db.productTranslation.count()).toBe(0);
+    setDraftProviderForTests(null);
   });
 
   it("assistant: a follow-up is asked inside the thread the first question started", async () => {

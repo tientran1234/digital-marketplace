@@ -10,13 +10,42 @@ import { post } from "./client";
  * review. The listing is written in the language the seller is working in;
  * `others` are the locales it can also be written in, which the page supplies
  * the way it supplies one to the payouts button.
+ *
+ * A fourth call is optional: the model drafts one of those languages from the
+ * words above, into the fields the seller then corrects. It fills a field and
+ * nothing else — what is submitted is whatever they left in the form.
  */
 export function NewProductForm({ others }: { others: readonly string[] }) {
   const t = useTranslations("sell");
   const locale = useLocale();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+  const [drafting, setDrafting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  /**
+   * The draft lands in the fields rather than in state: they are the seller's
+   * now, and a form that reads itself on submit cannot tell ours from theirs —
+   * which is the point. A language they have already written in is left alone,
+   * because their sentence is the one worth keeping.
+   */
+  async function draft(form: HTMLFormElement, other: string) {
+    const fields = form.elements;
+    const title = fields.namedItem(`title.${other}`) as HTMLInputElement;
+    const description = fields.namedItem(`description.${other}`) as HTMLTextAreaElement;
+    if (title.value.trim() || description.value.trim()) return setError(t("draftKeep"));
+    const fd = new FormData(form);
+    setDrafting(other); setError(null);
+    try {
+      const drafted = await post<{ title: string; description: string }>("/api/products/translate", {
+        title: fd.get("title"), description: fd.get("description"), from: locale, to: other,
+      });
+      title.value = drafted.title;
+      description.value = drafted.description;
+    } catch (err) { setError((err as Error).message); }
+    finally { setDrafting(null); }
+  }
+
   return (
     <form
       onSubmit={async (e) => {
@@ -49,6 +78,14 @@ export function NewProductForm({ others }: { others: readonly string[] }) {
           <input name={`title.${other}`} minLength={3} maxLength={120} />
           <label>{t("descriptionIn", { language: language(other, locale) })}</label>
           <textarea name={`description.${other}`} rows={3} minLength={10} maxLength={2000} />
+          <button
+            type="button"
+            className="ghost"
+            disabled={busy || drafting !== null}
+            onClick={(e) => draft(e.currentTarget.form!, other)}
+          >
+            {drafting === other ? t("drafting") : t("draft", { language: language(other, locale) })}
+          </button>
         </Fragment>
       ))}
       <label>{t("price")}</label><input name="priceMinor" type="number" min={0} step={1} defaultValue={0} />

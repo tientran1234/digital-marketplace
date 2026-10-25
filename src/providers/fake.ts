@@ -82,6 +82,16 @@ function lastToolResult(request: ModelRequest): string {
   return "";
 }
 
+/**
+ * The stand-in for a translator wherever there is no key: hand the seller's
+ * own words back. Nothing here can translate, and a draft that is visibly the
+ * source text is one a seller types over — where an invented one would be a
+ * demo quietly shipping a translation nobody wrote.
+ */
+export function untranslatedDraft(source: { title: string; description: string }): ModelProvider {
+  return new FakeProvider([() => reply(JSON.stringify({ title: source.title, description: source.description }), { inputTokens: 120, outputTokens: 60 })], "untranslated-draft");
+}
+
 /** The settings that decide whether the fakes are serving. Kept narrow so the choice can be exercised without a whole environment. */
 export type FakeEnv = Partial<Record<"FAKE_PROVIDERS" | "STRIPE_SECRET_KEY" | "ANTHROPIC_API_KEY", string>>;
 
