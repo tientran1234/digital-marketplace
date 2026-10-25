@@ -172,6 +172,23 @@ the title they can see and answers in their language whatever language the
 document it quotes is in; the ask route sits outside the `[locale]` segment and
 cannot see it, so the box sends it.
 
+A seller who would rather not start from an empty box can have one drafted:
+`POST /api/products/translate` turns the words already in the form into the
+other locale and hands them straight back to the two fields, where they are
+the seller's to correct, cut or clear. No listing is written on the way past —
+the one being drafted for does not exist yet — so the draft becomes a
+`ProductTranslation` row on the same submit everything else does, and what a
+buyer reads is still only what a seller posted. The model is told to translate
+what the listing says and author nothing: a figure, a price or a promise comes
+across as written, because a claim this marketplace restated is the seller
+answering for a sentence they never wrote. What comes back is held to the
+bounds the submit route enforces, so a draft is never text they have to cut
+down before the form will take it, and a language they have already written in
+is left alone. It is one call with no repair round and no second counter — the
+same monthly AI budget a buyer's question spends, refunded when no draft
+arrived, traced into the same table — because a seller is waiting on a form
+field and typing it was always the fallback.
+
 **Rate.** A purchase earns one review: the `Review` row is keyed by the order,
 so the unique constraint is what makes "one per purchase" hold rather than a
 check that races itself — buy the document twice and you have two things to say
@@ -254,7 +271,7 @@ Sign in as `buyer@`, `seller@` or `admin@example.test` to reach those screens:
 the seed gives them their roles, and the link only proves the address.
 
 ```bash
-pnpm test                       # 167 unit tests anywhere; 38 flow, search and first-boot tests need DATABASE_URL
+pnpm test                       # 181 unit tests anywhere; 39 flow, search and first-boot tests need DATABASE_URL
 pnpm test:e2e                   # the two buyer flows in Chromium — needs DATABASE_URL too
 pnpm eval                       # 40 questions over the seed docs — recall@5 and answer correctness
                                 # with DATABASE_URL, also search relevance per arm
@@ -324,15 +341,15 @@ languages, instead of one grey sentence or a table of headers with no rows.
 
 ```
 src/
-  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, what a provider sign-in has to prove, which words a listing shows which reader
+  domain/        pure: billing events, order + subscription + payout + review state machines, the fee split, plans, download access, who may rate a purchase, seller analytics, sign-in link rules, what a provider sign-in has to prove, which words a listing shows which reader, what a drafted translation may be
   providers/     stripe.ts (the only file importing stripe) · s3.ts (SigV4 by hand) · resend.ts (one POST) · google.ts (the only file knowing Google's endpoints) · fake.ts (the billing double, the extractive model, and the flag that serves them)
   rag/           chunk · embed (Voyage, hash) · mmr · rrf (rank fusion) · store (pgvector, raw SQL) · retrieve
   lib/           db · pg · env · money formatting · cover (the grid's derived gradients)
-  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · oauth (the signed flow cookie, and the provider seam) · mail · usage · analytics · license · storage · extract · seed (the demo data) · bootstrap + bootstrap-postgres (what a first boot owes an empty marketplace)
-  app/api/       auth (request-link/callback/logout, oauth/start + oauth/callback), checkout, webhooks, products (upload/submit/ask/download), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
+  server/        billing · workflows · payouts · reviews · assistant · conversations (the thread's rows) · translate (the draft a seller is offered) · search (full-text + pgvector, fused) · auth (opaque sessions) · magic-link · oauth (the signed flow cookie, and the provider seam) · mail · usage · analytics · license · storage · extract · seed (the demo data) · bootstrap + bootstrap-postgres (what a first boot owes an empty marketplace)
+  app/api/       auth (request-link/callback/logout, oauth/start + oauth/callback), checkout, webhooks, products (upload/submit/ask/download/translate), orders/refund, orders/review, seller/payouts, admin (review/refund/moderation), workflows/tick
   app/[locale]/  marketplace, product, account, sell, admin, login — en + vi
   components/    the client bits: SSE reader, checkout buttons, forms · empty state · stars
-tests/           domain, rag, rank fusion, the conversation window, listing fallback, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, the provider flow (PKCE, the sealed cookie, the address check), stripe mapping, evals, the fake-provider seam, the first-boot claim, and the flows + search on real Postgres
+tests/           domain, rag, rank fusion, the conversation window, listing fallback, drafted translations, upload extraction, storage keys + S3 signing, sign-in links + mailer choice, the provider flow (PKCE, the sealed cookie, the address check), stripe mapping, evals, the fake-provider seam, the first-boot claim, and the flows + search on real Postgres
 e2e/             playwright: buy → webhook → download, ask → cited answer, in a browser · preview (a deployment, over nothing but its URL)
 evals/           the assistant eval suite: questions · harness · search relevance · report
 scripts/         setup-db, seed, seed-docs (the corpus the evals ask about)
@@ -352,9 +369,15 @@ docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed 
   document behind the listing is searched whatever language either is in, and
   the vector arm still answers everything.
 - **Translating a listing the seller did not translate.** A fallback shows the
-  words they wrote. Nothing here calls a model to render them into the reader's
-  language, because a listing is what is being sold and a machine's paraphrase
-  of a price or a promise is the seller's to stand behind, not ours.
+  words they wrote, and nothing renders them into the reader's language on the
+  way out: a listing is what is being sold, and a machine's paraphrase of a
+  price or a promise is the seller's to stand behind, not ours. A draft is
+  offered to the seller instead — see Read it in your language — which is the
+  same rule from the other side, because the words a buyer reads are the ones
+  somebody submitted a form holding. So there is no listing translated on
+  demand for a reader, no model asked to fill a locale the seller left empty,
+  and nothing that treats a draft as approved because it came back clean: the
+  one thing published here is what a seller posted.
 - **Passwords.** Sign-in is an emailed link, or a provider where one is
   configured, and nothing else. There is no password to leak, reset or
   rate-limit. A product that needs a further door configures one — the OpenID
