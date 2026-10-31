@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-31
+
+- Reaching a listing through a language you are not reading it in: the lexical arm now searches every text a listing has rather than the one its reader is shown, so a term a seller left in English reaches a buyer on `/vi` whose card has replaced the title it was in and Vietnamese words typed on `/en` reach the translation holding them, and a hit found only in words the reader will not be shown names the language it matched so the card can say why a listing whose every visible word is a stranger to the query is in the results — reported per listing in favour of a match the reader can read, and sorted after the hits that needed no explaining, because recall this wide is worth having only while it appends to what a reader's own words earned.
+
 ## 2026-10-25
 
 - A translation the seller is offered rather than one we publish: the sell page drafts one other locale from the words already in the form, held to the bounds the submit route accepts and left in the two fields for the seller to correct, so a buyer still reads only what somebody posted — one call against the same monthly AI budget a question spends, refunded when no draft came back.

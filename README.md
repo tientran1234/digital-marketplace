@@ -136,19 +136,27 @@ than left looking like matches. The card names the passage it matched on,
 which is the only way a buyer can tell why a listing whose description says
 nothing about dunning came back for "dunning".
 
-Which words the lexical arm matches depends on who is reading. It resolves a
-listing's text the way the card does — the seller's translation for the
-reader's locale, the listing's own words where there is none — so a Vietnamese
-query reaches a title only a `ProductTranslation` row holds, and a translation
-its reader cannot read never pulls a listing into their results. The text
-search configuration follows the language of the words rather than being one
-constant: the reader's for a translation, the listing's own for its fallback
-text and for its document, since that is the language the seller uploaded it
-in. Vietnamese gets `simple` — Postgres ships no configuration for it, and
-`english` would both stem words that do not inflect and swallow `an`, `do` and
-`can` as stop words. The query is built in the same configuration as the text
-it is matched against, which one constant quietly got wrong: the english
-stemmer reads "ngày" as "ngài".
+The lexical arm matches every language the listing was written in — its own
+words and each translation of them — because a term a seller left in English
+is still the word a buyer would type for it whatever language their card is
+in. Which of those texts the reader will be shown is resolved the way the card
+resolves it, and a hit found in one of the others carries the language it
+matched: the card says "Found in the seller's Vietnamese wording" about a
+listing whose every visible word is a stranger to the query, which is the same
+answer a heading gives for a passage on page nine. Two orders keep the wider
+recall an addition rather than a trade. Per listing, a match in the words the
+reader does get is the one reported, so a listing whose own card answers the
+query is never explained away as a foreign-language hit — "SaaS" scores higher
+in the English title than in the Vietnamese one, and a Vietnamese reader is
+looking at the word on their own card. Across listings, the hits that needed
+explaining sort after the ones that did not. The text search configuration
+follows the language of the words rather than being one constant: the locale
+on the row the words are on, and the listing's own for its document, since
+that is the language the seller uploaded it in. Vietnamese gets `simple` —
+Postgres ships no configuration for it, and `english` would both stem words
+that do not inflect and swallow `an`, `do` and `can` as stop words. The query
+is built in the same configuration as the text it is matched against, which one
+constant quietly got wrong: the english stemmer reads "ngày" as "ngài".
 
 **Read it in your language.** The interface was already in English and
 Vietnamese while every listing in it was in one language, so a buyer on `/vi`
@@ -358,16 +366,17 @@ docs/            deploy (Vercel + Neon + a bucket) · self-hosted (the licensed 
 
 ## What is deliberately not here
 
-- **Searching a listing in a language you are not reading it in.** The lexical
-  arm searches one text per listing: the one this reader will be shown. So a
-  buyer on `/en` typing Vietnamese words does not reach a listing through its
-  Vietnamese translation, and a technical term a seller left in English does
-  not reach a buyer on `/vi` through the English title their card has replaced.
-  Searching every locale at once is a wider recall and a worse result: the card
-  comes back in the reader's language, which would leave a hit sharing no word
-  with what they typed — the thing the arms are kept asymmetric to avoid. The
-  document behind the listing is searched whatever language either is in, and
-  the vector arm still answers everything.
+- **Searching words nobody wrote.** Every language a seller wrote a listing in
+  is now searched, whichever one the reader is shown — see Search — because
+  those words are in the corpus and someone typing them back is asking for
+  that listing. What is not here is a query rendered into another language to
+  reach a listing in a third: a buyer typing English reaches an English title
+  because a seller typed it, not because anything translated either side on the
+  way past, which is the same rule the listings themselves are held to. So a
+  listing the seller wrote only in Vietnamese is not found by the English words
+  it would have used, and the lexical arm's answer stays a set of texts that
+  exist rather than one it generated — the vector arm is what still answers a
+  query no document contains a word of.
 - **Translating a listing the seller did not translate.** A fallback shows the
   words they wrote, and nothing renders them into the reader's language on the
   way out: a listing is what is being sold, and a machine's paraphrase of a
