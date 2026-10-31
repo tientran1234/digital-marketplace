@@ -177,6 +177,11 @@ describe.skipIf(!hasDb)("hybrid search", () => {
     it("says nothing about language when the match is in the words the reader gets", async () => {
       const [shown] = await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "vi" });
       expect(shown!.matchedLocale).toBeNull();
+      // "SaaS" is in both the English title and the Vietnamese one, and the
+      // English scores higher — but a Vietnamese reader is looking at the word
+      // on their own card, so there is nothing here to explain to them.
+      const [both] = await searchProducts("saas", { embedder, arms: ["text"], locale: "vi" });
+      expect(both!.matchedLocale).toBeNull();
       // A passage out of the document is named by its heading, not a language:
       // which language a document is in is not why that listing is here.
       const [passage] = await searchProducts("dunning expired cards", { embedder, arms: ["text"], locale: "vi" });
@@ -185,13 +190,14 @@ describe.skipIf(!hasDb)("hybrid search", () => {
     });
 
     it("never ranks words the reader cannot read above words they can", async () => {
-      // Either half reaches one listing: "weekly review" is in the other
-      // listing's own English text, and "định giá" is only in the playbook's
-      // Vietnamese translation, which an English reader is not shown. Wider
-      // recall is worth having only while it appends to the results a
-      // reader's own words earned rather than displacing them, so the
-      // cross-language hit comes second however well it ranked.
-      const hits = await searchProducts('"định giá" or "weekly review"', { embedder, arms: ["text"], locale: "en" });
+      // Either half reaches one listing: "notion" is in the other listing's
+      // own English text, and "định giá" is only in the playbook's Vietnamese
+      // translation, which an English reader is not shown. On `ts_rank` the
+      // phrase wins — it is two words of a shorter text — so this is the pair
+      // that pins the order rather than agreeing with it by accident. Recall
+      // this wide is worth having only while it appends to the results a
+      // reader's own words earned rather than displacing them.
+      const hits = await searchProducts('"định giá" or notion', { embedder, arms: ["text"], locale: "en" });
       expect(slugOf(hits)).toEqual(["notion-second-brain-template", "saas-pricing-playbook"]);
       expect(hits.map((h) => h.matchedLocale)).toEqual([null, "vi"]);
     });

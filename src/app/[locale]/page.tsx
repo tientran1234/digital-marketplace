@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/lib/db";
 import { cover } from "@/lib/cover";
-import { money } from "@/lib/format";
+import { language, money } from "@/lib/format";
 import { localiseListing } from "@/domain/listing";
 import { productRatings } from "@/server/reviews";
 import { searchProducts } from "@/server/search";
@@ -16,7 +16,7 @@ export default async function Home({ params, searchParams }: { params: Promise<{
   const [{ locale }, { q }] = await Promise.all([params, searchParams]);
   const query = (q ?? "").trim();
   const [t, tReviews] = await Promise.all([getTranslations("home"), getTranslations("reviews")]);
-  const { products, matched, nearestOnly } = query ? await search(query, locale) : await published();
+  const { products, matched, matchedIn, nearestOnly } = query ? await search(query, locale) : await published();
   // One grouped query for the whole grid rather than one per card.
   const ratings = await productRatings(products.map((p) => p.id));
   return (
@@ -37,6 +37,7 @@ export default async function Home({ params, searchParams }: { params: Promise<{
             const art = cover({ slug: p.slug, title: text.title });
             const rated = ratings.get(p.id) ?? NO_RATINGS;
             const passage = matched.get(p.id);
+            const otherLanguage = matchedIn.get(p.id);
             return (
               <Link key={p.id} href={`/${locale}/p/${p.slug}`} className="card">
                 {/* The gradient is data, not decoration the stylesheet can know: it comes from the slug. */}
@@ -46,6 +47,9 @@ export default async function Home({ params, searchParams }: { params: Promise<{
                   <p>{text.description}</p>
                   {/* Why this listing is in the results when its description does not say so. */}
                   {passage ? <p className="match">{t("foundIn", { passage })}</p> : null}
+                  {/* And why it is here when nothing the buyer can read says so: the
+                      words they typed are the seller's, in the language this card is not. */}
+                  {otherLanguage ? <p className="match">{t("foundInLanguage", { language: language(otherLanguage, locale) })}</p> : null}
                   <div className="price">
                     {money(p.priceMinor, p.currency, locale) ?? t("free")}
                     <Rating summary={rated} locale={locale} label={tReviews("rated", { average: rated.average ?? 0, count: rated.count })} />
@@ -62,7 +66,7 @@ export default async function Home({ params, searchParams }: { params: Promise<{
 
 async function published() {
   const products = await db.product.findMany({ where: { status: "PUBLISHED" }, orderBy: { createdAt: "desc" }, include: withSeller });
-  return { products, matched: new Map<string, string>(), nearestOnly: false };
+  return { products, matched: new Map<string, string>(), matchedIn: new Map<string, string>(), nearestOnly: false };
 }
 
 /** Hybrid search, kept in the order it ranked them, with the passage each listing matched on. */
@@ -75,6 +79,10 @@ async function search(query: string, locale: string) {
   return {
     products: hits.flatMap((h) => byId.get(h.productId) ?? []),
     matched: new Map(hits.flatMap((h) => (h.heading ? [[h.productId, h.heading] as const] : []))),
+    // The language a listing was found in, where it is not the one the card
+    // below is written in — the only thing that can account for a hit whose
+    // every visible word is a stranger to the query.
+    matchedIn: new Map(hits.flatMap((h) => (h.matchedLocale ? [[h.productId, h.matchedLocale] as const] : []))),
     // Nothing the buyer typed is in any document: these came back from the
     // vector arm, which has no threshold to refuse with, so say so rather
     // than let a listing that shares no word with the query look like a match.

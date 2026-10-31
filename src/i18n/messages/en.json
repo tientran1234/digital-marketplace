@@ -8,6 +8,7 @@
     "searchAction": "Search",
     "nearestOnly": "Nothing matched those words exactly — these are the closest documents.",
     "foundIn": "Found in “{passage}”",
+    "foundInLanguage": "Found in the seller’s {language} wording",
     "noResults": "Nothing matches “{query}”.",
     "noResultsHint": "Search reads listing titles and descriptions as well as the text inside each document — try fewer words.",
     "empty": "Nothing published yet.",

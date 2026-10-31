@@ -11,12 +11,16 @@
  * "nothing". Reciprocal rank fusion puts the two orderings together without
  * pretending a `ts_rank` and a cosine similarity share a unit.
  *
- * The lexical arm searches the words the reader in front of it will actually
- * be shown: the seller's translation for their locale where there is one, the
- * listing's own text where there is not, which is the same resolution
- * `domain/listing.ts` does for the card. So a listing never comes back for
- * words that are not in the card the buyer ends up looking at, and a
- * Vietnamese query reaches a title only a `ProductTranslation` row holds.
+ * The lexical arm searches every text a listing has — its own words and each
+ * translation of them, each in the configuration for the language it is
+ * written in — because a term the seller left in English is still the word a
+ * buyer would type for it whatever language their card is in. Which of those
+ * texts the reader will be shown is resolved the way `domain/listing.ts`
+ * resolves it for the card, and a hit that matched one of the others carries
+ * the language it matched, so the card can say why a listing whose title
+ * shares no word with the query is in the results. Those hits come last:
+ * recall this wide is worth having only while it appends to what a reader's
+ * own words earned rather than displacing it.
  *
  * Neither arm has an index, for the same reason the embeddings have none: the
  * corpus is a few hundred chunks, and a sequential scan over them costs less
@@ -138,21 +142,26 @@ const rankIn = (arms: readonly SearchArm[], ranks: (number | null)[], arm: Searc
 };
 
 /**
- * Full text over the listing and over its chunks, best match per listing.
+ * Full text over every text a listing has and over its chunks, best match per
+ * listing.
  *
- * The listing's text for this reader is one searchable unit and each chunk is
+ * Each of the listing's texts is one searchable unit and each chunk is
  * another, which is what lets a query that only occurs on page nine find a
- * product whose description never mentions it. Each unit is indexed in the
- * configuration for the language it is written in — the reader's where a
- * translation answered, the listing's own where it fell back, and the
- * listing's for the document, since that is the language the seller uploaded
- * it in. `websearch_to_tsquery` takes what a buyer types — bare words, quoted
- * phrases, a stray `or` — and a query that stems to nothing matches nothing
- * rather than everything.
+ * product whose description never mentions it — and a query in the seller's
+ * other language find one whose card has replaced the words it is in. Each
+ * unit is indexed in the configuration for the language it is written in: the
+ * locale on the row holding it, and the listing's for the document, since that
+ * is the language the seller uploaded it in. `websearch_to_tsquery` takes what
+ * a buyer types — bare words, quoted phrases, a stray `or` — and a query that
+ * stems to nothing matches nothing rather than everything.
  *
- * The one place a `ts_rank` from two configurations meets another is the order
- * below, which picks the best passage per listing and nothing else: fusion
- * reads positions, so the two never have to share a unit.
+ * Both orders below prefer a match the reader can read the words of. Per
+ * listing that decides which match represents it, so a listing whose own card
+ * answers the query is never reported as a hit in another language; across
+ * listings it keeps the widened recall behind the results that did not need
+ * widening. Only then do the orders read `score`, which is the one place a
+ * `ts_rank` from two configurations meets another — fusion reads positions, so
+ * the two never have to share a unit beyond picking a winner per listing.
  */
 async function textArm(query: string, limit: number, locale: string): Promise<ArmHit[]> {
   const { rows } = await pool().query<ArmHit>(
@@ -160,39 +169,54 @@ async function textArm(query: string, limit: number, locale: string): Promise<Ar
           tsq(config, q) AS (
             SELECT config, websearch_to_tsquery(config::regconfig, $1) FROM (VALUES ${CONFIGS}) AS c(config)
           ),
-          listing AS (
-            SELECT p.id AS "productId",
-                   COALESCE(t.title, p.title) || ' ' || COALESCE(t.description, p.description) AS words,
-                   -- A translation row is written whole or not at all, so the
-                   -- pair is in one language and so is the locale naming it.
-                   COALESCE(t.locale, p.locale) AS locale
-              FROM "Product" p
+          published AS (
+            SELECT p.id, p.title, p.description, p.locale FROM "Product" p WHERE p.status = 'PUBLISHED'
+          ),
+          -- Every language the seller wrote this listing in. A translation row
+          -- is written whole or not at all, so each pair is in one language
+          -- and so is the locale naming it.
+          written AS (
+            SELECT p.id AS "productId", p.title || ' ' || p.description AS words, p.locale AS locale
+              FROM published p
+            UNION ALL
+            SELECT t."productId", t.title || ' ' || t.description, t.locale
+              FROM "ProductTranslation" t
+              JOIN published p ON p.id = t."productId"
+          ),
+          -- The one of them this reader gets, which is what the card will show
+          -- and so what a match in it needs no explaining for.
+          shown AS (
+            SELECT p.id AS "productId", COALESCE(t.locale, p.locale) AS locale
+              FROM published p
               LEFT JOIN "ProductTranslation" t ON t."productId" = p.id AND t.locale = $2
-             WHERE p.status = 'PUBLISHED'
           ),
           hits AS (
-            SELECT l."productId", NULL::text AS heading,
-                   ts_rank(to_tsvector(tsq.config::regconfig, l.words), tsq.q) AS score
-              FROM listing l
-              LEFT JOIN cfg ON cfg.locale = l.locale
+            SELECT w."productId", NULL::text AS heading,
+                   CASE WHEN w.locale = s.locale THEN NULL ELSE w.locale END AS "matchedLocale",
+                   ts_rank(to_tsvector(tsq.config::regconfig, w.words), tsq.q) AS score
+              FROM written w
+              JOIN shown s ON s."productId" = w."productId"
+              LEFT JOIN cfg ON cfg.locale = w.locale
               JOIN tsq ON tsq.config = COALESCE(cfg.config, '${FALLBACK_CONFIG}')
-             WHERE to_tsvector(tsq.config::regconfig, l.words) @@ tsq.q
+             WHERE to_tsvector(tsq.config::regconfig, w.words) @@ tsq.q
             UNION ALL
-            SELECT ch."productId", ch.heading,
+            -- The document is the listing, not a language of it: a passage
+            -- answers for itself through the heading it is under.
+            SELECT ch."productId", ch.heading, NULL::text AS "matchedLocale",
                    ts_rank(to_tsvector(tsq.config::regconfig, ch.content), tsq.q) AS score
               FROM "ProductChunk" ch
-              JOIN "Product" p ON p.id = ch."productId"
+              JOIN published p ON p.id = ch."productId"
               LEFT JOIN cfg ON cfg.locale = p.locale
               JOIN tsq ON tsq.config = COALESCE(cfg.config, '${FALLBACK_CONFIG}')
-             WHERE p.status = 'PUBLISHED'
-               AND to_tsvector(tsq.config::regconfig, ch.content) @@ tsq.q
+             WHERE to_tsvector(tsq.config::regconfig, ch.content) @@ tsq.q
           ),
           best AS (
-            SELECT DISTINCT ON ("productId") "productId", heading, score
+            SELECT DISTINCT ON ("productId") "productId", heading, "matchedLocale", score
               FROM hits
-             ORDER BY "productId", score DESC
+             ORDER BY "productId", ("matchedLocale" IS NOT NULL), score DESC
           )
-     SELECT "productId", heading FROM best ORDER BY score DESC, "productId" LIMIT $3`,
+     SELECT "productId", heading, "matchedLocale" FROM best
+      ORDER BY ("matchedLocale" IS NOT NULL), score DESC, "productId" LIMIT $3`,
     [query, locale, limit],
   );
   return rows;
@@ -204,7 +228,7 @@ async function vectorArm(query: string, limit: number, embedder: Embedder): Prom
   if (!vector) return [];
   const { rows } = await pool().query<ArmHit>(
     `WITH nearest AS (
-            SELECT c."productId", c.heading, 1 - (c.embedding <=> $1::vector) AS score
+            SELECT c."productId", c.heading, NULL::text AS "matchedLocale", 1 - (c.embedding <=> $1::vector) AS score
               FROM "ProductChunk" c
               JOIN "Product" p ON p.id = c."productId"
              WHERE p.status = 'PUBLISHED' AND c.embedding IS NOT NULL
@@ -212,11 +236,11 @@ async function vectorArm(query: string, limit: number, embedder: Embedder): Prom
              LIMIT $2
           ),
           best AS (
-            SELECT DISTINCT ON ("productId") "productId", heading, score
+            SELECT DISTINCT ON ("productId") "productId", heading, "matchedLocale", score
               FROM nearest
              ORDER BY "productId", score DESC
           )
-     SELECT "productId", heading FROM best ORDER BY score DESC, "productId" LIMIT $3`,
+     SELECT "productId", heading, "matchedLocale" FROM best ORDER BY score DESC, "productId" LIMIT $3`,
     [toVectorLiteral(vector), limit * 3, limit],
   );
   return rows;

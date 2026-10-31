@@ -8,6 +8,7 @@
     "searchAction": "Tìm",
     "nearestOnly": "Không có từ nào khớp chính xác — đây là những tài liệu gần nhất.",
     "foundIn": "Tìm thấy trong “{passage}”",
+    "foundInLanguage": "Tìm thấy trong nội dung {language} của người bán",
     "noResults": "Không có kết quả cho “{query}”.",
     "noResultsHint": "Tìm kiếm đọc cả tiêu đề, mô tả và nội dung bên trong từng tài liệu — thử ít từ khoá hơn.",
     "empty": "Chưa có sản phẩm nào.",
