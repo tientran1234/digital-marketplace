@@ -66,6 +66,13 @@ export interface SearchHit {
   productId: string;
   /** Heading of the passage that matched, null when the listing's own text is what matched. */
   heading: string | null;
+  /**
+   * The language of the listing text that matched, when the reader will not be
+   * shown it — so the card has something to say about a listing whose title
+   * shares no word with the query. Null for a match in the words the reader
+   * does get, and for a passage out of the document, which `heading` names.
+   */
+  matchedLocale: string | null;
   /** The fused score. Comparable inside one result set and nowhere else. */
   score: number;
   /** 1-based rank in each arm that ran; null where that arm did not return the product. */
@@ -89,6 +96,7 @@ export interface SearchOptions {
 interface ArmHit {
   productId: string;
   heading: string | null;
+  matchedLocale: string | null;
 }
 
 /**
@@ -115,6 +123,7 @@ export async function searchProducts(query: string, options: SearchOptions = {})
     .map((fused) => ({
       productId: fused.item.productId,
       heading: fused.item.heading,
+      matchedLocale: fused.item.matchedLocale,
       score: fused.score,
       ranks: {
         text: rankIn(arms, fused.ranks, "text"),

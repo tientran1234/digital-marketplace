@@ -121,9 +121,10 @@ describe.skipIf(!hasDb)("hybrid search", () => {
   /**
    * Searching a listing in the language the seller translated it into. The
    * `simple` configuration stands in for the Vietnamese one Postgres does not
-   * ship; what these pin is that the reader's locale decides whose words the
-   * lexical arm matches, and that it never matches words the reader will not
-   * be shown.
+   * ship; what these pin is that the reader's locale decides which text the
+   * lexical arm reports a match in, that every language the seller wrote is
+   * still reachable, and that a hit the reader cannot read the words of says
+   * so rather than ranking as if they could.
    */
   describe("a listing in its translation", () => {
     const vi = {
@@ -155,8 +156,44 @@ describe.skipIf(!hasDb)("hybrid search", () => {
       expect(slugOf(hits)).toEqual(["saas-pricing-playbook"]);
     });
 
-    it("does not reach it through a translation its reader cannot read", async () => {
-      expect(await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "en" })).toEqual([]);
+    it("reaches it through a translation its reader will not be shown, and names the language", async () => {
+      // The words are the seller's and they are in the corpus, so a buyer who
+      // types them finds the listing whatever language their own card is in.
+      const hits = await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "en" });
+      expect(slugOf(hits)).toEqual(["saas-pricing-playbook"]);
+      // No passage to point at, so the language is the whole of why it is here.
+      expect(hits[0]!.heading).toBeNull();
+      expect(hits[0]!.matchedLocale).toBe("vi");
+    });
+
+    it("reaches it through the seller's own words a translation replaced", async () => {
+      // The other half: a term left in English on a listing whose Vietnamese
+      // card has replaced the English title it was in.
+      const hits = await searchProducts("saas pricing playbook", { embedder, arms: ["text"], locale: "vi" });
+      expect(slugOf(hits)).toEqual(["saas-pricing-playbook"]);
+      expect(hits[0]!.matchedLocale).toBe("en");
+    });
+
+    it("says nothing about language when the match is in the words the reader gets", async () => {
+      const [shown] = await searchProducts("sổ tay định giá", { embedder, arms: ["text"], locale: "vi" });
+      expect(shown!.matchedLocale).toBeNull();
+      // A passage out of the document is named by its heading, not a language:
+      // which language a document is in is not why that listing is here.
+      const [passage] = await searchProducts("dunning expired cards", { embedder, arms: ["text"], locale: "vi" });
+      expect(passage!.heading).toBe("Churn and downgrades");
+      expect(passage!.matchedLocale).toBeNull();
+    });
+
+    it("never ranks words the reader cannot read above words they can", async () => {
+      // Either half reaches one listing: "weekly review" is in the other
+      // listing's own English text, and "định giá" is only in the playbook's
+      // Vietnamese translation, which an English reader is not shown. Wider
+      // recall is worth having only while it appends to the results a
+      // reader's own words earned rather than displacing them, so the
+      // cross-language hit comes second however well it ranked.
+      const hits = await searchProducts('"định giá" or "weekly review"', { embedder, arms: ["text"], locale: "en" });
+      expect(slugOf(hits)).toEqual(["notion-second-brain-template", "saas-pricing-playbook"]);
+      expect(hits.map((h) => h.matchedLocale)).toEqual([null, "vi"]);
     });
 
     it("searches the listing's own text where that locale has no translation", async () => {
